@@ -4,7 +4,7 @@ Loads both datasets, aggregates Stage 1 daily → month-end, merges on
 (cusip, date), and asserts that overlapping columns are close.
 
 Reads:
-    _data/corporate_bond_returns.parquet  (from pull_open_source_bond.py)
+    _data/pulled/corporate_bond_returns.parquet  (from pull_open_source_bond.py)
     stage1/data/stage1_YYYYMMDD.parquet   (from Stage 1 pipeline)
 
 Run:
@@ -82,7 +82,7 @@ def _load_stage1_monthly(path):
 
 
 def _load_osbap():
-    osbap_path = DATA_DIR / "corporate_bond_returns.parquet"
+    osbap_path = DATA_DIR / "pulled" / "corporate_bond_returns.parquet"
     if not osbap_path.exists():
         raise FileNotFoundError(
             f"{osbap_path} not found. Run pull_open_source_bond.py first."

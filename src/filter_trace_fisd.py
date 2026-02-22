@@ -1,7 +1,7 @@
 """Filter raw TRACE data to only CUSIPs present in the FISD universe.
 
 For each TRACE dataset (enhanced, standard, 144a):
-    Reads:  _data/{dataset}/year=YYYY/month=MM/data.parquet
+    Reads:  _data/pulled/{dataset}/year=YYYY/month=MM/data.parquet
     Writes: _data/{dataset}_fisd/year=YYYY/month=MM/data.parquet
 
 Only keeps rows whose cusip_id is in the FISD universe.
@@ -24,6 +24,7 @@ from clean_utils import partitions_to_clean, read_partition, write_clean_partiti
 logger = logging.getLogger(__name__)
 
 DATA_DIR = Path(config("DATA_DIR"))
+PULL_DIR = DATA_DIR / "pulled"
 
 ALL_DATASETS = ["trace_enhanced", "trace_standard", "trace_144a"]
 
@@ -39,12 +40,13 @@ def _parse_dataset_arg() -> str | None:
 def filter_dataset_fisd(
     dataset: str,
     fisd_cusips: list[str],
-    data_dir: Path,
+    input_dir: Path,
+    output_dir: Path,
 ) -> None:
     """Filter one TRACE dataset to FISD universe CUSIPs, month by month."""
     output_dataset = f"{dataset}_fisd"
 
-    to_clean = partitions_to_clean(data_dir, dataset, output_dataset)
+    to_clean = partitions_to_clean(input_dir, dataset, output_dataset, output_dir=output_dir)
     logger.info("[%s] %d months to filter", dataset, len(to_clean))
 
     if not to_clean:
@@ -52,7 +54,7 @@ def filter_dataset_fisd(
         return
 
     for year, month in to_clean:
-        df = read_partition(data_dir, dataset, year, month)
+        df = read_partition(input_dir, dataset, year, month)
         n_before = len(df)
 
         df = df.filter(pl.col("cusip_id").is_in(fisd_cusips))
@@ -68,7 +70,7 @@ def filter_dataset_fisd(
             n_before - n_after,
         )
 
-        write_clean_partition(df, data_dir, output_dataset, year, month)
+        write_clean_partition(df, output_dir, output_dataset, year, month)
         if n_after == 0:
             logger.info(
                 "[%s] %d-%02d: no rows after FISD filter, wrote empty partition",
@@ -87,13 +89,13 @@ def main():
     datasets = [dataset_arg] if dataset_arg else ALL_DATASETS
 
     for dataset in datasets:
-        input_dir = DATA_DIR / dataset
-        if not input_dir.exists():
+        input_path = PULL_DIR / dataset
+        if not input_path.exists():
             logger.warning(
                 "Skipping %s -- input directory does not exist", dataset
             )
             continue
-        filter_dataset_fisd(dataset, fisd_cusips, DATA_DIR)
+        filter_dataset_fisd(dataset, fisd_cusips, input_dir=PULL_DIR, output_dir=DATA_DIR)
 
 
 if __name__ == "__main__":

@@ -11,17 +11,27 @@ logger = logging.getLogger(__name__)
 
 
 def partitions_to_clean(
-    data_dir: Path,
+    input_dir: Path,
     input_dataset: str,
     output_dataset: str,
+    output_dir: Path | None = None,
 ) -> list[tuple[int, int]]:
     """Return (year, month) tuples that exist in input but not in output.
 
     Unlike pulls, we do NOT re-clean the current month -- cleaning is
     deterministic given the local raw data.
+
+    Parameters
+    ----------
+    input_dir : base directory for the raw input partitions
+    input_dataset : name of the input dataset (e.g. "trace_enhanced")
+    output_dataset : name of the output dataset (e.g. "trace_enhanced_fisd")
+    output_dir : base directory for the output partitions (defaults to input_dir)
     """
-    input_parts = existing_partitions(data_dir, input_dataset)
-    output_parts = existing_partitions(data_dir, output_dataset)
+    if output_dir is None:
+        output_dir = input_dir
+    input_parts = existing_partitions(input_dir, input_dataset)
+    output_parts = existing_partitions(output_dir, output_dataset)
     return sorted(input_parts - output_parts)
 
 

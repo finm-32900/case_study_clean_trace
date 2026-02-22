@@ -1,8 +1,8 @@
 """Pull FISD bond reference data from WRDS.
 
 Saves:
-    _data/fisd_issue.parquet
-    _data/fisd_issuer.parquet
+    _data/pulled/fisd_issue.parquet
+    _data/pulled/fisd_issuer.parquet
 """
 
 import logging
@@ -14,6 +14,7 @@ from wrds_utils import wrds_connection, query_polars
 logger = logging.getLogger(__name__)
 
 DATA_DIR = Path(config("DATA_DIR"))
+PULL_DIR = DATA_DIR / "pulled"
 WRDS_USERNAME = config("WRDS_USERNAME")
 
 ISSUE_COLUMNS = [
@@ -52,7 +53,7 @@ QRY_ISSUER = f"""
 
 
 def main():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    PULL_DIR.mkdir(parents=True, exist_ok=True)
 
     with wrds_connection(WRDS_USERNAME) as db:
         logger.info("Pulling FISD issue table...")
@@ -63,8 +64,8 @@ def main():
         issuer_df = query_polars(db, QRY_ISSUER)
         logger.info("Pulled %d issuer rows", len(issuer_df))
 
-    issue_path = DATA_DIR / "fisd_issue.parquet"
-    issuer_path = DATA_DIR / "fisd_issuer.parquet"
+    issue_path = PULL_DIR / "fisd_issue.parquet"
+    issuer_path = PULL_DIR / "fisd_issuer.parquet"
 
     issue_df.write_parquet(issue_path)
     issuer_df.write_parquet(issuer_path)

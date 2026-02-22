@@ -4,8 +4,8 @@ Applies configurable screens (FISD_PARAMS) to filter the issue-level table
 down to the set of bonds used in the TRACE cleaning pipeline.
 
 Reads:
-    _data/fisd_issue.parquet
-    _data/fisd_issuer.parquet
+    _data/pulled/fisd_issue.parquet
+    _data/pulled/fisd_issuer.parquet
 
 Writes:
     _data/fisd_universe.parquet         (filtered FISD issue table, all columns)
@@ -147,8 +147,8 @@ def build_fisd_universe(
 
 
 def main():
-    issue_path = DATA_DIR / "fisd_issue.parquet"
-    issuer_path = DATA_DIR / "fisd_issuer.parquet"
+    issue_path = DATA_DIR / "pulled" / "fisd_issue.parquet"
+    issuer_path = DATA_DIR / "pulled" / "fisd_issuer.parquet"
 
     fisd, fisd_offamt = build_fisd_universe(issue_path, issuer_path)
 

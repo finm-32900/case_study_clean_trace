@@ -4,10 +4,10 @@ Downloads the OSBAP main panel (monthly bond-level data) and treasury
 bond returns for comparison with our Stage 1 daily output.
 
 Saves:
-    _data/corporate_bond_returns.parquet
-    _data/corporate_bond_returns_README.txt
-    _data/treasury_bond_returns.parquet
-    _data/treasury_bond_returns_README.pdf
+    _data/pulled/corporate_bond_returns.parquet
+    _data/pulled/corporate_bond_returns_README.txt
+    _data/pulled/treasury_bond_returns.parquet
+    _data/pulled/treasury_bond_returns_README.pdf
 """
 
 import os
@@ -21,6 +21,7 @@ import requests
 from settings import config
 
 DATA_DIR = Path(config("DATA_DIR"))
+PULL_DIR = DATA_DIR / "pulled"
 MIN_N_ROWS_EXPECTED = 500
 
 
@@ -131,47 +132,47 @@ def load_data_into_dataframe(csv_path: Path, check_n_rows: bool = True):
     return df
 
 
-def load_treasury_returns(data_dir=DATA_DIR):
+def load_treasury_returns(data_dir=PULL_DIR):
     return pl.read_parquet(data_dir / "treasury_bond_returns.parquet")
 
 
-def load_corporate_bond_returns(data_dir=DATA_DIR):
+def load_corporate_bond_returns(data_dir=PULL_DIR):
     return pl.read_parquet(data_dir / "corporate_bond_returns.parquet")
 
 
 def _demo():
-    treas = pl.read_parquet(DATA_DIR / "treasury_bond_returns.parquet")
+    treas = pl.read_parquet(PULL_DIR / "treasury_bond_returns.parquet")
     print(treas.schema)
     print(treas.head())
 
-    bonds = pl.read_parquet(DATA_DIR / "corporate_bond_returns.parquet")
+    bonds = pl.read_parquet(PULL_DIR / "corporate_bond_returns.parquet")
     print(bonds.schema)
     print(bonds.head())
 
 
 if __name__ == "__main__":
     for dataset, info in DATA_INFO.items():
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        PULL_DIR.mkdir(parents=True, exist_ok=True)
 
         source_format = info.get("source_format", "csv")
         print(f"\n--- Pulling {dataset} ---")
 
         if source_format == "csv":
             # Download and process CSV file
-            csv_path = download_data(info["url"], info["csv"], data_dir=DATA_DIR)
+            csv_path = download_data(info["url"], info["csv"], data_dir=PULL_DIR)
             df = load_data_into_dataframe(csv_path)
-            df.write_parquet(DATA_DIR / info["parquet"])
+            df.write_parquet(PULL_DIR / info["parquet"])
             os.remove(csv_path)
 
             # Download README file
             readme_filename = f"{info['parquet'].replace('.parquet', '_README.pdf')}"
-            download_file(info["readme"], DATA_DIR / readme_filename)
+            download_file(info["readme"], PULL_DIR / readme_filename)
 
         elif source_format == "zip_parquet":
             # Download and extract ZIP containing parquet
             extracted_parquet, extracted_readme = download_and_extract_zip_parquet(
                 url=info["url"],
-                data_dir=DATA_DIR,
+                data_dir=PULL_DIR,
                 expected_parquet=info["zip_contents"],
                 expected_readme=info.get("readme_contents"),
             )
@@ -185,14 +186,14 @@ if __name__ == "__main__":
                 )
 
             # Rename to final parquet name if different
-            final_parquet_path = DATA_DIR / info["parquet"]
+            final_parquet_path = PULL_DIR / info["parquet"]
             if extracted_parquet != final_parquet_path:
                 extracted_parquet.rename(final_parquet_path)
             print(f"Saved to {final_parquet_path}")
 
             # Rename README if present
             if extracted_readme and "readme_file" in info:
-                final_readme_path = DATA_DIR / info["readme_file"]
+                final_readme_path = PULL_DIR / info["readme_file"]
                 if extracted_readme != final_readme_path:
                     extracted_readme.rename(final_readme_path)
                 print(f"Saved README to {final_readme_path}")

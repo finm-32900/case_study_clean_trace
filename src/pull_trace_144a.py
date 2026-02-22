@@ -1,7 +1,7 @@
 """Pull raw TRACE 144A data from WRDS, month by month.
 
 Saves hive-partitioned parquet:
-    _data/trace_144a/year=YYYY/month=MM/data.parquet
+    _data/pulled/trace_144a/year=YYYY/month=MM/data.parquet
 
 Incremental: skips months that already exist locally (except current month).
 """
@@ -18,6 +18,7 @@ from pull_utils import existing_partitions, months_to_pull, write_partition
 logger = logging.getLogger(__name__)
 
 DATA_DIR = Path(config("DATA_DIR"))
+PULL_DIR = DATA_DIR / "pulled"
 WRDS_USERNAME = config("WRDS_USERNAME")
 
 DATASET = "trace_144a"
@@ -76,10 +77,10 @@ def pull_month(db, year: int, month: int) -> "pl.DataFrame":
 
 
 def main():
-    existing = existing_partitions(DATA_DIR, DATASET)
+    existing = existing_partitions(PULL_DIR, DATASET)
     logger.info("Found %d existing partitions for %s", len(existing), DATASET)
 
-    to_pull = months_to_pull(START_DATE, existing, end_date=END_DATE, base_dir=DATA_DIR, dataset=DATASET)
+    to_pull = months_to_pull(START_DATE, existing, end_date=END_DATE, base_dir=PULL_DIR, dataset=DATASET)
     logger.info("Need to pull %d months", len(to_pull))
 
     if not to_pull:
@@ -89,7 +90,7 @@ def main():
     with wrds_connection(WRDS_USERNAME) as db:
         for year, month in to_pull:
             df = pull_month(db, year, month)
-            write_partition(df, DATA_DIR, DATASET, year, month)
+            write_partition(df, PULL_DIR, DATASET, year, month)
             if len(df) == 0:
                 logger.info("Month %d-%02d: no data, wrote empty partition", year, month)
             time.sleep(1)

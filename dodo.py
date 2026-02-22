@@ -44,8 +44,8 @@ def task_pull_fisd():
             "ipython ./src/pull_fisd.py",
         ],
         "targets": [
-            DATA_DIR / "fisd_issue.parquet",
-            DATA_DIR / "fisd_issuer.parquet",
+            DATA_DIR / "pulled" / "fisd_issue.parquet",
+            DATA_DIR / "pulled" / "fisd_issuer.parquet",
         ],
         "file_dep": [
             "./src/settings.py",
@@ -70,7 +70,7 @@ def task_pull_trace():
             "ipython ./src/settings.py",
             "ipython ./src/pull_trace_enhanced.py",
         ],
-        "targets": [DATA_DIR / "trace_enhanced"],
+        "targets": [DATA_DIR / "pulled" / "trace_enhanced"],
         "file_dep": [
             "./src/settings.py",
             "./src/wrds_utils.py",
@@ -88,7 +88,7 @@ def task_pull_trace():
             "ipython ./src/settings.py",
             "ipython ./src/pull_trace_standard.py",
         ],
-        "targets": [DATA_DIR / "trace_standard"],
+        "targets": [DATA_DIR / "pulled" / "trace_standard"],
         "file_dep": [
             "./src/settings.py",
             "./src/wrds_utils.py",
@@ -106,7 +106,7 @@ def task_pull_trace():
             "ipython ./src/settings.py",
             "ipython ./src/pull_trace_144a.py",
         ],
-        "targets": [DATA_DIR / "trace_144a"],
+        "targets": [DATA_DIR / "pulled" / "trace_144a"],
         "file_dep": [
             "./src/settings.py",
             "./src/wrds_utils.py",
@@ -132,8 +132,8 @@ def task_build_fisd_universe():
         "file_dep": [
             "./src/settings.py",
             "./src/build_fisd_universe.py",
-            DATA_DIR / "fisd_issue.parquet",
-            DATA_DIR / "fisd_issuer.parquet",
+            DATA_DIR / "pulled" / "fisd_issue.parquet",
+            DATA_DIR / "pulled" / "fisd_issuer.parquet",
         ],
         "clean": [],
         "verbosity": 2,
@@ -171,7 +171,7 @@ def task_run_stage0():
             "name": member,
             "doc": f"Run Stage 0 cleaning for {member} TRACE",
             "actions": [
-                f"cd stage0 && python3 _run_{member}_trace.py",
+                f"cd stage0 && python _run_{member}_trace.py",
             ],
             "task_dep": ["filter_trace_fisd"],
             "file_dep": [
@@ -191,7 +191,7 @@ def task_run_stage1():
     return {
         "actions": [
             "mkdir -p stage1/data stage1/logs",
-            "cd stage1 && python3 _run_stage1.py",
+            "cd stage1 && python _run_stage1.py",
         ],
         "task_dep": ["run_stage0"],
         "file_dep": [
@@ -216,8 +216,8 @@ def task_pull_open_source_bond():
             "ipython ./src/pull_open_source_bond.py",
         ],
         "targets": [
-            DATA_DIR / "corporate_bond_returns.parquet",
-            DATA_DIR / "treasury_bond_returns.parquet",
+            DATA_DIR / "pulled" / "corporate_bond_returns.parquet",
+            DATA_DIR / "pulled" / "treasury_bond_returns.parquet",
         ],
         "file_dep": [
             "./src/settings.py",
@@ -242,7 +242,7 @@ def task_test_stage1_vs_open_source():
         "file_dep": [
             "./src/settings.py",
             "./src/test_stage1_vs_open_source.py",
-            DATA_DIR / "corporate_bond_returns.parquet",
+            DATA_DIR / "pulled" / "corporate_bond_returns.parquet",
         ],
         "clean": [],
         "verbosity": 2,
