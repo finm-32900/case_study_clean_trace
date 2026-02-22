@@ -167,3 +167,5 @@ wheels/
 !.gitignore
 !README.md
 !LICENSE
+
+docs/

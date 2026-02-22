@@ -1,0 +1,32 @@
+[config]
+type = "pipeline"
+chartbook_format_version = "0.0.2"
+
+[site]
+title = "Clean TRACE"
+author = "Jeremiah Bejarano"
+copyright = "2025"
+logo_path = ""
+favicon_path = ""
+
+[pipeline]
+id = "case_study_clean_trace"
+pipeline_name = "Clean TRACE"
+pipeline_description = "Corporate bond TRACE data cleaning pipeline (Dick-Nielsen methodology)"
+lead_pipeline_developer = "Jeremiah Bejarano"
+contributors = ["Jeremiah Bejarano"]
+software_modules_command = "module load anaconda3/3.11.4 TeXLive/2023"
+runs_on_grid_or_windows_or_other = "Windows/Linux/MacOS"
+git_repo_URL = ""
+README_file_path = "./README.md"
+
+[notebooks]
+
+[notebooks.01_data_sources_overview]
+notebook_name = "Data Sources Overview"
+notebook_description = "Quick look at each raw dataset pulled by the pipeline."
+notebook_path = "_output/01_data_sources_overview_ipynb.ipynb"
+
+[dataframes]
+
+[charts]
