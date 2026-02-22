@@ -52,11 +52,10 @@ STAGE0_OUTPUT_FIGURES = True  # Set to False to skip error plots for faster proc
 # ============================================================================
 # USAGE INSTRUCTIONS
 # ============================================================================
-# Each stage imports this file:
+# This file lives in src/. Each stage imports it from its location in src/:
 #
-#   import sys
-#   from pathlib import Path
-#   sys.path.insert(0, str(Path(__file__).parent.parent))
+#   # In src/stage0/ or src/stage1/ files:
+#   sys.path.insert(0, str(Path(__file__).parent.parent))  # adds src/ to path
 #   from config import WRDS_USERNAME, AUTHOR, OUTPUT_FORMAT, TRACE_MEMBERS, STAGE0_OUTPUT_FIGURES
 #
 # This ensures single source of truth for shared settings across all stages.
