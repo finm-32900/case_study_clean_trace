@@ -9,6 +9,23 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import WRDS_USERNAME, AUTHOR, OUTPUT_FORMAT
 
+# --- Date range and data paths (read from .env via decouple) ---------------
+import decouple
+
+def _date_or_none(key):
+    val = decouple.config(key, default="")
+    if not val:
+        return None
+    return val  # kept as string for downstream use
+
+START_DATE = _date_or_none("START_DATE")
+END_DATE   = _date_or_none("END_DATE")
+
+PROJECT_ROOT = Path(__file__).parent.parent
+DATA_DIR = PROJECT_ROOT / "_data"
+FISD_OFFAMT_PATH = DATA_DIR / "fisd_universe_offamt.parquet"
+FISD_UNIVERSE_PATH = DATA_DIR / "fisd_universe.parquet"
+
 # --- FISD universe build params --------------------------------------
 FISD_PARAMS = {
     # Switches for each screen
@@ -120,3 +137,27 @@ def get_config(kind: str) -> dict:
     """
     overrides = PER_DATASET.get(kind, {})
     return {**COMMON_KWARGS, **overrides}
+
+
+def get_local_config(kind: str) -> dict:
+    """
+    Returns kwargs for the local-parquet cleaning pipeline.
+    kind in {"enhanced", "standard", "144a"}.
+    """
+    return dict(
+        data_dir         = DATA_DIR,
+        fisd_offamt_path = FISD_OFFAMT_PATH,
+        fisd_universe_path = FISD_UNIVERSE_PATH,
+        start_date       = START_DATE,
+        end_date         = END_DATE,
+        out_dir          = Path(__file__).parent,  # stage0/
+        data_type        = kind,
+        volume_filter    = ("dollar", 10000),
+        trade_times      = ["00:00:00", "23:59:59"],
+        calendar_name    = "NYSE",
+        ds_params        = DS_PARAMS,
+        bb_params        = BB_PARAMS,
+        init_error_params = INIT_ERROR,
+        filters          = FILTER_SWITCHES,
+        clean_agency     = True,
+    )

@@ -34,8 +34,24 @@ from matplotlib.dates import AutoDateLocator, DateFormatter
 from dataclasses import dataclass
 
 def load_and_process_trace_file(filepath, date_column='trd_exctn_dt'):
-    """Load a TRACE parquet file and convert date columns to datetime."""
-    df = pd.read_parquet(filepath)
+    """Load a TRACE parquet file and convert date columns to datetime.
+
+    Supports both single files and glob patterns for hive-partitioned data.
+    """
+    import polars as pl
+    import glob as _glob
+
+    filepath_str = str(filepath)
+    if '*' in filepath_str:
+        # Glob pattern for hive-partitioned data
+        files = sorted(_glob.glob(filepath_str))
+        if not files:
+            raise FileNotFoundError(f"No files match pattern: {filepath_str}")
+        df_pl = pl.read_parquet(files)
+    else:
+        df_pl = pl.read_parquet(filepath_str)
+
+    df = df_pl.to_pandas()
     if date_column in df.columns:
         df[date_column] = pd.to_datetime(df[date_column])
     return df
@@ -172,7 +188,7 @@ def GetNewVarsPy(x):
         try:
             # Calculate yield to maturity using the bond's true frequency
             ytm = bond.bondYield(
-                MktCleanPrice,             # clean price
+                ql.BondPrice(MktCleanPrice, ql.BondPrice.Clean),
                 DayCountBasis,             # day counter
                 ql.Compounded,             # compounding
                 InterestFrequency,         # frequency
@@ -239,7 +255,7 @@ def GetNewVarsPy(x):
             # Total accumulated value
             accall = acclast + accpmt
             
-        except RuntimeError as e:            
+        except (RuntimeError, TypeError) as e:
             pass
     
     # Return all calculated bond analytics    
@@ -249,10 +265,9 @@ def GetNewVarsPy(x):
         dur_bond, mac_bond, conv_bond, x.bond_maturity         
     )
 
-def process_chunk(chunk,n_cores):
-    return pd.DataFrame(
-        Parallel(n_jobs=n_cores)(delayed(GetNewVarsPy)(x) for x in tqdm(chunk.itertuples(index=False)))
-    )
+def process_chunk(chunk, n_cores):
+    results = [GetNewVarsPy(x) for x in tqdm(chunk.itertuples(index=False))]
+    return pd.DataFrame(results)
 
 def get_fred_yields(start_date: str | pd.Timestamp = "2000-01-31") -> pd.DataFrame:
     """
@@ -356,7 +371,7 @@ def ComputeCredit(x):
     return (cusip, date, yld_interp)
 
 
-def calculate_credit_spreads(traced_out, ylds, n_jobs=10):
+def calculate_credit_spreads(traced_out, ylds, n_jobs=2):
     """
     Calculate credit spreads for bond data by interpolating Treasury yields.
     
@@ -366,7 +381,7 @@ def calculate_credit_spreads(traced_out, ylds, n_jobs=10):
         Bond data containing cusip_id, trd_exctn_dt, ytm, bond_maturity
     ylds : DataFrame
         Treasury yield data with various tenors
-    n_jobs : int, default=10
+    n_jobs : int, default=2
         Number of parallel jobs to run
     
     Returns:
@@ -385,10 +400,8 @@ def calculate_credit_spreads(traced_out, ylds, n_jobs=10):
     if len(missing_yields) > 0:
         print(f"Warning: {len(missing_yields)} rows have missing yield data")
     
-    # Process in parallel
-    results = Parallel(n_jobs=n_jobs)(
-        delayed(ComputeCredit)(x) for x in tqdm(traced_cs.itertuples(index=False))
-    )
+    # Process sequentially
+    results = [ComputeCredit(x) for x in tqdm(traced_cs.itertuples(index=False))]
     
     # Convert results to DataFrame
     spread_df = pd.DataFrame(
@@ -5821,6 +5834,10 @@ def optimize_dtypes(df, categorical_cols=None, float32=True, downcast_ints=True)
     - Converting float64 to float32 (50% reduction for numeric columns)
     - Downcasting integers to smallest sufficient type
     - Converting low-cardinality string columns to category type
+
+    Note: When working with Polars DataFrames, dtype optimization is largely
+    unnecessary as Polars selects efficient dtypes by default during reads
+    and operations. This function is intended for pandas DataFrames.
 
     Parameters
     ----------

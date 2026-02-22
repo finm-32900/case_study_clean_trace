@@ -102,6 +102,10 @@ data_reports/
 output/
 outputs/
 _data/
+_output/
+
+# PyDoit database
+.doit-db.sqlite
 
 # Temporary files
 *.tmp

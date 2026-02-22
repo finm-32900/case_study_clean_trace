@@ -17,6 +17,7 @@ import sys
 # Import shared configuration from root-level config.py
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import WRDS_USERNAME, AUTHOR, OUTPUT_FORMAT, TRACE_MEMBERS
+import decouple
 
 # ============================================================================
 # USER CONFIGURATION - EDIT THESE VALUES
@@ -41,16 +42,15 @@ ROOT_PATH = ""  # Auto-detect from current working directory
 # NOTE: TRACE_MEMBERS is imported from config.py (shared across all stages)
 
 # --- Execution Settings ---
-# Auto-detect number of CPU cores (leave as None for auto-detection)
-N_CORES = None    # Set to None for auto-detection, or specify a number (e.g., 10)
-N_CHUNKS = 10      # Number of chunks for parallel operations
-
-# Auto-detect N_CORES if not set
-if N_CORES is None:
+# Read N_CORES from .env if set, otherwise auto-detect
+_n_cores_env = decouple.config("N_CORES", default=None)
+if _n_cores_env is not None:
+    N_CORES = int(_n_cores_env)
+else:
     import multiprocessing
     N_CORES = multiprocessing.cpu_count()
-    # Use all available cores, but you can cap it if needed
-    # N_CORES = min(N_CORES, 20)  # Uncomment to cap at 20 cores
+
+N_CHUNKS = 10      # Number of chunks for parallel operations
 
 # --- Date Filter ---
 DATE_CUT_OFF = "2025-03-31"  # Only include data on/before this date
@@ -153,17 +153,19 @@ LOG_DIR = STAGE1_DIR / "logs"
 
 def get_latest_stage0_date(stage0_dir: Path, trace_member: str = "enhanced") -> str:
     """
-    Auto-detect the most recent STAGE0_DATE_STAMP by finding the latest parquet file.
+    Auto-detect the most recent STAGE0_DATE_STAMP by finding the latest FISD parquet file.
 
-    Searches for main TRACE parquet files with pattern: trace_{member}_YYYYMMDD.parquet
-    Excludes files with additional suffixes (e.g., trace_enhanced_fisd_YYYYMMDD.parquet)
+    Searches for FISD parquet files with pattern: trace_enhanced_fisd_YYYYMMDD.parquet
+    The FISD file is only present in the "enhanced" folder and serves as the date
+    reference for the entire stage0 output (the main TRACE data is now written as
+    hive-partitioned directories).
 
     Parameters
     ----------
     stage0_dir : Path
         Path to stage0 directory
     trace_member : str, default="enhanced"
-        TRACE dataset type: "enhanced", "standard", or "144a"
+        TRACE dataset type (FISD file only exists under "enhanced")
 
     Returns
     -------
@@ -173,7 +175,7 @@ def get_latest_stage0_date(stage0_dir: Path, trace_member: str = "enhanced") -> 
     Raises
     ------
     FileNotFoundError
-        If stage0 output directory or parquet files don't exist
+        If stage0 output directory or FISD parquet files don't exist
     ValueError
         If no valid date stamps can be extracted from filenames
 
@@ -190,39 +192,38 @@ def get_latest_stage0_date(stage0_dir: Path, trace_member: str = "enhanced") -> 
             f"Ensure stage0 has been run successfully and outputs exist."
         )
 
-    # Look for main data file: trace_{member}_YYYYMMDD.parquet
-    pattern = f"trace_{trace_member}_*.parquet"
-    parquet_files = list(member_dir.glob(pattern))
+    # Look for FISD file: trace_{member}_fisd_YYYYMMDD.parquet
+    pattern = f"trace_{trace_member}_fisd_*.parquet"
+    fisd_files = list(member_dir.glob(pattern))
 
-    if not parquet_files:
+    if not fisd_files:
         raise FileNotFoundError(
-            f"No TRACE parquet files found in {member_dir}\n"
+            f"No FISD parquet files found in {member_dir}\n"
             f"Expected pattern: {pattern}\n"
             f"Ensure stage0 has been run successfully."
         )
 
-    # Filter for main files only (exclude files with additional suffixes like _fisd_)
-    # Main file format: trace_enhanced_20251022.parquet (3 parts when split by '_')
+    # Filter for valid FISD files
     # FISD file format: trace_enhanced_fisd_20251022.parquet (4 parts when split by '_')
-    main_files = []
-    for f in parquet_files:
-        stem = f.stem  # e.g., "trace_enhanced_20251022"
+    valid_files = []
+    for f in fisd_files:
+        stem = f.stem  # e.g., "trace_enhanced_fisd_20251022"
         parts = stem.split("_")
 
-        # Should be exactly 3 parts: ["trace", "enhanced", "20251022"]
-        if len(parts) == 3 and parts[-1].isdigit() and len(parts[-1]) == 8:
-            main_files.append(f)
+        # Should be exactly 4 parts: ["trace", "enhanced", "fisd", "20251022"]
+        if len(parts) == 4 and parts[-1].isdigit() and len(parts[-1]) == 8:
+            valid_files.append(f)
 
-    if not main_files:
+    if not valid_files:
         raise ValueError(
-            f"No main TRACE parquet files found in {member_dir}\n"
-            f"Found {len(parquet_files)} parquet files, but none match expected format:\n"
-            f"  Expected: trace_{trace_member}_YYYYMMDD.parquet\n"
-            f"  Found files: {[f.name for f in parquet_files[:5]]}"
+            f"No valid FISD parquet files found in {member_dir}\n"
+            f"Found {len(fisd_files)} matching files, but none match expected format:\n"
+            f"  Expected: trace_{trace_member}_fisd_YYYYMMDD.parquet\n"
+            f"  Found files: {[f.name for f in fisd_files[:5]]}"
         )
 
     # Extract dates and return most recent
-    dates = [f.stem.split("_")[-1] for f in main_files]
+    dates = [f.stem.split("_")[-1] for f in valid_files]
     latest_date = max(dates)
 
     return latest_date
@@ -311,18 +312,28 @@ def validate_config(config: dict) -> None:
             f"Please ensure ROOT_PATH is correctly set in _stage1_settings.py"
         )
 
-    # Check stage0 data files exist
-    missing_files = []
+    # Check stage0 hive-partitioned data directories exist for each member
+    missing_data = []
     for member in config["trace_members"]:
         member_folder = config["stage0_dir"] / member
-        filename = f"trace_{member}_{config['stage0_date_stamp']}.parquet"
-        filepath = member_folder / filename
-        if not filepath.exists():
-            missing_files.append(str(filepath))
+        hive_files = list(member_folder.glob("year=*/month=*/data.parquet"))
+        if not hive_files:
+            missing_data.append(str(member_folder / "year=*/month=*/data.parquet"))
 
-    if missing_files:
+    if missing_data:
         raise FileNotFoundError(
-            "Stage0 output files not found:\n" + "\n".join(missing_files) + "\n"
+            "Stage0 hive-partitioned data not found:\n" + "\n".join(missing_data) + "\n"
+            "Please ensure stage0 has been run successfully."
+        )
+
+    # Check FISD file exists in the enhanced folder
+    fisd_file = (
+        config["stage0_dir"] / "enhanced"
+        / f"trace_enhanced_fisd_{config['stage0_date_stamp']}.parquet"
+    )
+    if not fisd_file.exists():
+        raise FileNotFoundError(
+            f"Stage0 FISD file not found: {fisd_file}\n"
             "Please ensure stage0 has been run with the correct date stamp."
         )
 

@@ -36,3 +36,15 @@ matplotlib>=3.8.0
 
 # Handle environment variables
 python-decouple
+
+# PyDoit task runner
+doit>=0.36.0
+
+# Polars (data processing)
+polars>=1.9.0
+
+# IPython (for running scripts via dodo.py)
+ipython
+
+# Testing
+pytest

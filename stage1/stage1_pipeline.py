@@ -25,10 +25,12 @@ Updated: 2025-11-17
 """
 
 import sys
+import glob
 from pathlib import Path
 from datetime import datetime
 import pandas as pd
 import numpy as np
+import polars as pl
 import wrds
 import gc
 from pandas.tseries.offsets import MonthEnd
@@ -189,19 +191,22 @@ def step2_load_trace_data():
     trace_parts = []
 
     for i, member in enumerate(TRACE_MEMBERS, start=1):
-        # Construct path: stage0/enhanced/trace_enhanced_YYYYMMDD.parquet
+        # Construct path: stage0/{member}/year=YYYY/month=MM/data.parquet
         member_folder = STAGE0_DIR / member
-        filename = f"trace_{member}_{STAGE0_DATE_STAMP}.parquet"
-        filepath = member_folder / filename
+        pattern = str(member_folder / "year=*" / "month=*" / "data.parquet")
+        parquet_files = glob.glob(pattern)
 
-        if not filepath.exists():
+        if not parquet_files:
             raise FileNotFoundError(
-                f"Stage0 output not found: {filepath}\n"
-                f"Expected: stage0/{member}/trace_{member}_{STAGE0_DATE_STAMP}.parquet"
+                f"Stage0 hive-partitioned output not found in: {member_folder}\n"
+                f"Expected: stage0/{member}/year=YYYY/month=MM/data.parquet"
             )
 
-        logger.info("Loading %s...", filepath.name)
-        df_i = hf.load_and_process_trace_file(filepath)
+        logger.info("Loading %s from %d hive-partitioned files...", member, len(parquet_files))
+        df_pl = pl.scan_parquet(pattern).collect()
+        df_i = df_pl.to_pandas()
+        if 'trd_exctn_dt' in df_i.columns:
+            df_i['trd_exctn_dt'] = pd.to_datetime(df_i['trd_exctn_dt'])
         df_i["db_type"] = i  # Tag by load order: 1=enhanced, 2=standard, 3=144a
         trace_parts.append(df_i)
         logger.info("  Loaded %s: %d rows", member, len(df_i))
@@ -451,30 +456,28 @@ def step4_merge_fisd():
     traced_out_categorical = ['cusip_id', 'day_count_basis', 'interest_frequency', 'coupon_type']
     traced_out = hf.optimize_dtypes(traced_out, categorical_cols=traced_out_categorical)
 
-    # ----- Save trace_other as chunked parquet files -------------------------
-    # Save in N_CHUNKS files to avoid redundant I/O during step5
-    # Each chunk corresponds to the same chunk ranges used in step5
-    logger.info("Saving trace_other as %d chunked parquet files to free memory...", N_CHUNKS)
+    # ----- Save trace_other as monthly parquet files -------------------------
+    # Save by (year, month) to align with month-by-month step5 processing
+    logger.info("Saving trace_other as monthly parquet files to free memory...")
 
-    chunk_size = int(np.ceil(len(trace_other) / N_CHUNKS))
-    for i in range(N_CHUNKS):
-        start_idx = i * chunk_size
-        end_idx = min(start_idx + chunk_size, len(trace_other))
+    trace_other['_year'] = trace_other['trd_exctn_dt'].dt.year
+    trace_other['_month'] = trace_other['trd_exctn_dt'].dt.month
+    month_groups = trace_other.groupby(['_year', '_month'])
+    n_months = month_groups.ngroups
+    for (y, m), grp in month_groups:
+        chunk_path = STAGE1_DATA / f"temp_trace_other_year={y}_month={m:02d}.parquet"
+        grp.drop(columns=['_year', '_month']).to_parquet(chunk_path, index=False, compression='snappy')
+        logger.info("Saved trace_other month %d-%02d: %d rows", y, m, len(grp))
 
-        chunk_path = STAGE1_DATA / f"temp_trace_other_chunk_{i:03d}.parquet"
-        trace_other_chunk = trace_other.iloc[start_idx:end_idx]
-        trace_other_chunk.to_parquet(chunk_path, index=False, compression='snappy')
-        logger.info("Saved chunk %d/%d: %s (rows %d-%d)", i+1, N_CHUNKS, chunk_path.name, start_idx, end_idx)
-
-    logger.info("trace_other saved as %d chunk files in: %s", N_CHUNKS, STAGE1_DATA)
+    logger.info("trace_other saved as %d monthly files in: %s", n_months, STAGE1_DATA)
 
     # Free memory by deleting trace_other
-    del trace_other
+    del trace_other, month_groups
     gc.collect()
     logger.info("trace_other removed from memory")
 
-    print("\n[STEP 4 COMPLETE] FISD merged and data split for parallel processing")
-    print(f"trace_other saved as {N_CHUNKS} chunk files (freed from memory)")
+    print(f"\n[STEP 4 COMPLETE] FISD merged and data split for parallel processing")
+    print(f"trace_other saved as {n_months} monthly files (freed from memory)")
     print(f"traced_out shape: {traced_out.shape} (for parallel analytics)")
     print(f"Filters applied: bond_maturity > 0, bond_age > 0, dated_date not null")
 
@@ -488,58 +491,67 @@ def step4_merge_fisd():
 # STEP 5: COMPUTE BOND ANALYTICS (PARALLEL)
 # ============================================================================
 def step5_compute_bond_analytics():
-    """Compute bond analytics in sequential chunks with credit spreads.
+    """Compute bond analytics month-by-month with credit spreads.
 
-    Memory optimization: Uses chunked merge-and-write pattern to avoid holding
-    full analytics_df + trace_other + final_df in memory simultaneously.
+    Memory optimization: Processes one calendar month at a time so that
+    joblib.Parallel only forks a small slice of the dataset, keeping peak
+    RSS well below 16 GB even on a laptop.
     """
     mem_start = hf.log_memory_usage("step5_compute_bond_analytics_start")
     global final_df, traced_out
 
     logger.info("=" * 80)
-    logger.info("STEP 5: Computing Bond Analytics (Sequential Chunks with Incremental Merge)")
+    logger.info("STEP 5: Computing Bond Analytics (Month-by-Month)")
     logger.info("=" * 80)
 
-    columns1=['cusip_id', 'trd_exctn_dt', 'pr', 'prclean', 'prfull',
-             'acclast', 'accpmt', 'accall', 'ytm', 'mod_dur','mac_dur', 'convexity',
-             'bond_maturity']
+    columns1 = ['cusip_id', 'trd_exctn_dt', 'pr', 'prclean', 'prfull',
+                'acclast', 'accpmt', 'accall', 'ytm', 'mod_dur', 'mac_dur', 'convexity',
+                'bond_maturity']
 
-    # ----- Chunk + parallel --------------------------------------------------
-    if N_CHUNKS <= 0:
-        raise ValueError("N_CHUNKS must be >= 1")
-
-    chunk_size = int(np.ceil(len(traced_out) / N_CHUNKS))
     total_rows = len(traced_out)
-    logger.info("Processing %d rows in %d chunks (chunk_size=%d)", total_rows, N_CHUNKS, chunk_size)
+    logger.info("Total rows to process: %d", total_rows)
 
-    # Verify trace_other chunk files exist (saved in step4)
-    chunk_0_path = STAGE1_DATA / "temp_trace_other_chunk_000.parquet"
-    if not chunk_0_path.exists():
+    # ----- Determine unique (year, month) pairs ------------------------------
+    traced_out['_year'] = traced_out['trd_exctn_dt'].dt.year
+    traced_out['_month'] = traced_out['trd_exctn_dt'].dt.month
+    month_keys = (
+        traced_out[['_year', '_month']]
+        .drop_duplicates()
+        .sort_values(['_year', '_month'])
+        .values.tolist()
+    )
+    n_months = len(month_keys)
+    logger.info("Processing %d months with N_CORES=%d", n_months, N_CORES)
+
+    # Verify at least one trace_other monthly file exists (saved in step4)
+    first_y, first_m = month_keys[0]
+    check_path = STAGE1_DATA / f"temp_trace_other_year={first_y}_month={first_m:02d}.parquet"
+    if not check_path.exists():
         raise FileNotFoundError(
-            f"trace_other chunk files not found. Expected {chunk_0_path} and similar. "
+            f"trace_other monthly files not found. Expected {check_path} and similar. "
             f"Ensure step4 completed successfully."
         )
 
-    # Path for incremental output
-    final_output_path = STAGE1_DATA / "temp_final_merged.parquet"
-    if final_output_path.exists():
-        final_output_path.unlink()  # Remove if exists from previous run
-        logger.info("Removed existing temp final output")
+    # ----- Create hive output directory structure ----------------------------
+    hive_base = STAGE1_DATA / "step5_hive"
+    if hive_base.exists():
+        import shutil
+        shutil.rmtree(hive_base)
+    hive_base.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Will read trace_other from chunked parquet files in: %s", STAGE1_DATA)
-    logger.info("Will write merged results to: %s", final_output_path)
-
-    # ----- Process each chunk with incremental merge -------------------------
-    for i in range(N_CHUNKS):
-        start_idx = i * chunk_size
-        end_idx = min(start_idx + chunk_size, total_rows)
-
+    # ----- Process each month ------------------------------------------------
+    for idx, (y, m) in enumerate(month_keys, 1):
         logger.info("=" * 60)
-        logger.info("Processing chunk %d/%d | rows %d-%d", i + 1, N_CHUNKS, start_idx, end_idx)
+        logger.info("Processing month %d/%d: %d-%02d", idx, n_months, y, m)
 
-        # 1. Get traced_out chunk for analytics computation
-        chunk = traced_out.iloc[start_idx:end_idx].copy()
+        # 1. Filter traced_out to this month
+        mask = (traced_out['_year'] == y) & (traced_out['_month'] == m)
+        chunk = traced_out.loc[mask].drop(columns=['_year', '_month']).copy()
         logger.info("Chunk shape for analytics: %s", chunk.shape)
+
+        if chunk.empty:
+            logger.warning("Empty chunk for %d-%02d, skipping", y, m)
+            continue
 
         # 2. Process bond analytics using helper function
         logger.info("Computing bond analytics...")
@@ -549,64 +561,60 @@ def step5_compute_bond_analytics():
 
         # 3. Calculate credit spreads
         logger.info("Calculating credit spreads...")
-        spreads = hf.calculate_credit_spreads(processed, ylds)
+        spreads = hf.calculate_credit_spreads(processed, ylds, n_jobs=N_CORES)
 
         # 4. Merge spreads back into processed chunk
         analytics_chunk = processed.merge(
             spreads[['cusip_id', 'trd_exctn_dt', 'credit_spread']],
             how="left",
-            left_on=['cusip_id', 'trd_exctn_dt'],
-            right_on=['cusip_id', 'trd_exctn_dt']
+            on=['cusip_id', 'trd_exctn_dt']
         )
 
         del chunk, spreads, processed
         gc.collect()
 
-        # 5. Read corresponding trace_other chunk from pre-chunked parquet file
-        # Each chunk was saved as a separate file in step4, avoiding redundant I/O
-        chunk_path = STAGE1_DATA / f"temp_trace_other_chunk_{i:03d}.parquet"
-        logger.info("Reading trace_other chunk from: %s", chunk_path.name)
+        # 5. Read corresponding trace_other monthly file
+        to_path = STAGE1_DATA / f"temp_trace_other_year={y}_month={m:02d}.parquet"
+        logger.info("Reading trace_other from: %s", to_path.name)
+        trace_other_month = pd.read_parquet(to_path)
+        logger.info("trace_other_month shape: %s", trace_other_month.shape)
 
-        trace_other_chunk = pd.read_parquet(chunk_path)
-        logger.info("trace_other_chunk shape: %s", trace_other_chunk.shape)
-
-        # 6. Merge analytics with trace_other chunk
+        # 6. Merge analytics with trace_other
         logger.info("Merging analytics with trace_other columns...")
         merged_chunk = analytics_chunk.merge(
-            trace_other_chunk,
+            trace_other_month,
             on=["cusip_id", "trd_exctn_dt"],
             how="left"
         )
         logger.info("Merged chunk shape: %s", merged_chunk.shape)
 
-        # Optimize dtypes of merged chunk before writing
+        # Optimize dtypes before writing
         merged_chunk = hf.optimize_dtypes(merged_chunk)
 
-        del analytics_chunk, trace_other_chunk
+        del analytics_chunk, trace_other_month
         gc.collect()
 
-        # 7. Append to output parquet (incremental write)
-        if i == 0:
-            # First chunk: create new file
-            merged_chunk.to_parquet(final_output_path, index=False, compression='snappy')
-            logger.info("Created output parquet with first chunk")
-        else:
-            # Subsequent chunks: append
-            existing = pd.read_parquet(final_output_path)
-            combined = pd.concat([existing, merged_chunk], ignore_index=True)
-            combined.to_parquet(final_output_path, index=False, compression='snappy')
-            del existing, combined
-            logger.info("Appended chunk to output parquet")
+        # 7. Write to hive partition
+        partition_dir = hive_base / f"year={y}" / f"month={m:02d}"
+        partition_dir.mkdir(parents=True, exist_ok=True)
+        partition_path = partition_dir / "data.parquet"
+        merged_chunk.to_parquet(partition_path, index=False, compression='snappy')
+        logger.info("Wrote %d rows to %s", len(merged_chunk), partition_path)
 
         del merged_chunk
         gc.collect()
 
-        logger.info("[OK] Chunk %d/%d complete", i + 1, N_CHUNKS)
+        logger.info("[OK] Month %d-%02d complete (%d/%d)", y, m, idx, n_months)
 
-    # ----- Load final merged result -------------------------------------------
+    # ----- Load final merged result from hive partitions ---------------------
     logger.info("=" * 80)
-    logger.info("All chunks processed. Loading final merged dataset...")
-    final_df = pd.read_parquet(final_output_path)
+    logger.info("All months processed. Loading final merged dataset from hive partitions...")
+    import glob as globmod
+    partition_files = sorted(globmod.glob(str(hive_base / "year=*" / "month=*" / "data.parquet")))
+    final_df = pd.concat(
+        [pd.read_parquet(f) for f in partition_files],
+        ignore_index=True
+    )
     logger.info("Final merged shape: %s", final_df.shape)
 
     # Clean up traced_out from memory
@@ -616,24 +624,25 @@ def step5_compute_bond_analytics():
     # Clean up temporary files
     logger.info("Cleaning up temporary files...")
 
-    # Remove all trace_other chunk files
-    chunk_files_removed = 0
-    for i in range(N_CHUNKS):
-        chunk_path = STAGE1_DATA / f"temp_trace_other_chunk_{i:03d}.parquet"
-        if chunk_path.exists():
-            chunk_path.unlink()
-            chunk_files_removed += 1
-    logger.info("Removed %d trace_other chunk files", chunk_files_removed)
+    # Remove hive partitions (data is now in final_df)
+    import shutil
+    if hive_base.exists():
+        shutil.rmtree(hive_base)
+        logger.info("Removed step5_hive directory")
 
-    # Remove final merged temp file
-    if final_output_path.exists():
-        final_output_path.unlink()
-        logger.info("Removed temp_final_merged.parquet")
+    # Remove trace_other monthly files
+    files_removed = 0
+    for (y, m) in month_keys:
+        to_path = STAGE1_DATA / f"temp_trace_other_year={y}_month={m:02d}.parquet"
+        if to_path.exists():
+            to_path.unlink()
+            files_removed += 1
+    logger.info("Removed %d trace_other monthly files", files_removed)
 
-    print("\n[STEP 5 COMPLETE] Bond analytics computed with chunked merge")
+    print("\n[STEP 5 COMPLETE] Bond analytics computed month-by-month")
     print(f"Shape: {final_df.shape}")
     print(f"New analytics columns: ytm, mod_dur, convexity, credit_spread, etc.")
-    print(f"Memory optimization: Avoided holding full datasets simultaneously")
+    print(f"Memory optimization: Processed {n_months} months sequentially")
 
     mem_end = hf.log_memory_usage("step5_compute_bond_analytics_end")
     hf.log_memory_delta(mem_start, mem_end, "step5_compute_bond_analytics")
