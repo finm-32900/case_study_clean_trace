@@ -41,14 +41,13 @@ def run_stage1(config: dict):
         The stage1_pipeline module with all processed data
     """
 
-    # Import stage1_pipeline as a module
-    stage1_dir = Path(config["stage1_dir"])
-    pipeline_script_path = stage1_dir / "stage1_pipeline.py"
+    # Import stage1_pipeline as a module (co-located with this script in src/stage1/)
+    pipeline_script_path = Path(__file__).resolve().parent / "stage1_pipeline.py"
 
     if not pipeline_script_path.exists():
         raise FileNotFoundError(
             f"Pipeline script not found: {pipeline_script_path}\n"
-            "Expected stage1_pipeline.py in stage1/ directory"
+            "Expected stage1_pipeline.py alongside create_daily_stage1.py"
         )
 
     # Load the module dynamically
@@ -98,6 +97,11 @@ def run_stage1(config: dict):
     # Create directories (in case they don't exist yet)
     for d in [config["stage1_dir"], config["stage1_data"], config["log_dir"]]:
         d.mkdir(parents=True, exist_ok=True)
+
+    # Ensure sibling imports work for the dynamically-loaded pipeline module
+    _pipeline_dir = str(pipeline_script_path.resolve().parent)
+    if _pipeline_dir not in sys.path:
+        sys.path.insert(0, _pipeline_dir)
 
     # Now execute the module (this runs the configuration and import sections)
     spec.loader.exec_module(pipeline_module)

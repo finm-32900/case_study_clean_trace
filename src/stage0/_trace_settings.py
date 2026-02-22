@@ -21,7 +21,7 @@ def _date_or_none(key):
 START_DATE = _date_or_none("START_DATE")
 END_DATE   = _date_or_none("END_DATE")
 
-PROJECT_ROOT = Path(__file__).parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "_data"
 FISD_OFFAMT_PATH = DATA_DIR / "fisd_universe_offamt.parquet"
 FISD_UNIVERSE_PATH = DATA_DIR / "fisd_universe.parquet"
@@ -150,7 +150,7 @@ def get_local_config(kind: str) -> dict:
         fisd_universe_path = FISD_UNIVERSE_PATH,
         start_date       = START_DATE,
         end_date         = END_DATE,
-        out_dir          = Path(__file__).parent,  # stage0/
+        out_dir          = PROJECT_ROOT / "stage0",  # data output: ./stage0/
         data_type        = kind,
         volume_filter    = ("dollar", 10000),
         trade_times      = ["00:00:00", "23:59:59"],

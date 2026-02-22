@@ -1,7 +1,14 @@
 # -*- coding: utf-8 -*-
 
-import logging
 import sys
+from pathlib import Path
+
+# -- path setup: sibling imports (src/stage0/) and parent imports (src/) --
+_THIS_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(_THIS_DIR))
+sys.path.insert(0, str(_THIS_DIR.parent))
+
+import logging
 import gc
 
 gc.collect()

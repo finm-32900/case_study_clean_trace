@@ -9,12 +9,17 @@ Created: 2025-10-20
 """
 
 from __future__ import annotations
-import _error_plot_helpers as HLP
-from pathlib import Path
 import sys
+from pathlib import Path
 
-# Import shared configuration from root-level config.py
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# -- path setup: sibling imports (src/stage0/) and parent imports (src/) --
+_THIS_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(_THIS_DIR))
+sys.path.insert(0, str(_THIS_DIR.parent))
+
+import _error_plot_helpers as HLP
+
+# Import shared configuration from config.py (now in src/)
 from config import TRACE_MEMBERS, STAGE0_OUTPUT_FIGURES, AUTHOR
 
 # ---------------------------
@@ -30,8 +35,8 @@ DATE           = "" # Date of the data run
 
 # Can leave these blank for execution directory, e.g., ""
 # Or, put your path, e.g., for Windows: C:\Users\proj\
-IN_DIR         = "" #Path(r"C:\Users\01_trace\")
-OUT_DIR        = "" #Path(r"C:\Users\01_trace\")
+IN_DIR         = Path(__file__).resolve().parent.parent.parent / "stage0"
+OUT_DIR        = Path(__file__).resolve().parent.parent.parent / "stage0"
 
 SUBPLOT_DIM    = (4, 2)# Leave this alone
 USE_LATEX_FONTS= False # Change to True, but your plots will take ages to render

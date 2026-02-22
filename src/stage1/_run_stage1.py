@@ -9,10 +9,17 @@ Author: Alex Dickerson
 Created: 2025-11-17
 """
 
+import sys
+from pathlib import Path
+
+# -- path setup: sibling imports (src/stage1/) and parent imports (src/) --
+_THIS_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(_THIS_DIR))
+sys.path.insert(0, str(_THIS_DIR.parent))
+
 from create_daily_stage1 import run_stage1
 from _stage1_settings import get_config, validate_config, print_config_summary
 import logging
-import sys
 import gc
 
 # Force garbage collection before starting

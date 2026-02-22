@@ -126,16 +126,8 @@ LINKER_ZIPKEY = "OSBAP_Linker_October_2025.parquet"
 
 # Auto-detect ROOT_PATH if not set
 if not ROOT_PATH or ROOT_PATH == "":
-    # Get current working directory (where the script is being run from)
-    # If running from ~/proj/stage1, this will be ~/proj/stage1
-    current_dir = Path.cwd()
-
-    # If current directory is named 'stage1', use parent directory as ROOT_PATH
-    if current_dir.name == "stage1":
-        ROOT_PATH = current_dir.parent
-    else:
-        # Otherwise, assume current directory IS the root path
-        ROOT_PATH = current_dir
+    # Derive project root from this file's location: src/stage1/_stage1_settings.py
+    ROOT_PATH = Path(__file__).resolve().parent.parent.parent
 else:
     # User specified ROOT_PATH, convert to Path object if needed
     ROOT_PATH = Path(ROOT_PATH)
