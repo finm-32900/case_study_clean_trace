@@ -5,5 +5,4 @@
 #$ -o stage0/logs/02_standard.out    # Log standard output
 #$ -e stage0/logs/02_standard.err    # Log standard error
 
-cd stage0
-python3 _run_standard_trace.py
+python3 ./src/stage0/_run_standard_trace.py

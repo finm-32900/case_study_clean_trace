@@ -6,5 +6,4 @@
 #$ -o stage1/logs/stage1.out       # Log standard output
 #$ -e stage1/logs/stage1.err       # Log standard error
 
-cd stage1
-python3 _run_stage1.py
+python3 ./src/stage1/_run_stage1.py

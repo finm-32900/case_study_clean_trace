@@ -8,17 +8,44 @@ like a Makefile, but is Python-based.
 #######################################
 ## Make sure the src folder is in the path
 import sys
+from os import environ
+from pathlib import Path
 
 sys.path.insert(1, "./src/")
 
-from pathlib import Path
-
 from settings import config
+
+SRC_PY_FILES = sorted(Path("./src").rglob("*.py"))
 
 DOIT_CONFIG = {"backend": "sqlite3", "dep_file": "./.doit-db.sqlite"}
 
 DATA_DIR = config("DATA_DIR")
 OUTPUT_DIR = config("OUTPUT_DIR")
+OS_TYPE = config("OS_TYPE")
+
+## Helpers for handling Jupyter Notebook tasks
+environ["PYDEVD_DISABLE_FILE_VALIDATION"] = "1"
+
+# fmt: off
+def jupyter_execute_notebook(notebook_path):
+    return f"jupyter nbconvert --execute --to notebook --ClearMetadataPreprocessor.enabled=True --inplace {notebook_path}"
+def jupyter_to_html(notebook_path, output_dir=OUTPUT_DIR):
+    return f"jupyter nbconvert --to html --output-dir={output_dir} {notebook_path}"
+def jupyter_clear_output(notebook_path):
+    return f"jupyter nbconvert --ClearOutputPreprocessor.enabled=True --ClearMetadataPreprocessor.enabled=True --inplace {notebook_path}"
+# fmt: on
+
+
+def mv(from_path, to_path):
+    """Move a file to a folder"""
+    from_path = Path(from_path)
+    to_path = Path(to_path)
+    to_path.mkdir(parents=True, exist_ok=True)
+    if OS_TYPE == "nix":
+        command = f"mv {from_path} {to_path}"
+    else:
+        command = f"move {from_path} {to_path}"
+    return command
 
 
 ##################################
@@ -171,14 +198,14 @@ def task_run_stage0():
             "name": member,
             "doc": f"Run Stage 0 cleaning for {member} TRACE",
             "actions": [
-                f"cd stage0 && python _run_{member}_trace.py",
+                f"python ./src/stage0/_run_{member}_trace.py",
             ],
             "task_dep": ["filter_trace_fisd"],
             "file_dep": [
-                f"./stage0/_run_{member}_trace.py",
-                "./stage0/_trace_settings.py",
-                "./stage0/clean_trace_local.py",
-                "./config.py",
+                f"./src/stage0/_run_{member}_trace.py",
+                "./src/stage0/_trace_settings.py",
+                "./src/stage0/clean_trace_local.py",
+                "./src/config.py",
             ],
             "targets": [f"./stage0/{member}/"],
             "clean": [],
@@ -191,16 +218,16 @@ def task_run_stage1():
     return {
         "actions": [
             "mkdir -p stage1/data stage1/logs",
-            "cd stage1 && python _run_stage1.py",
+            "python ./src/stage1/_run_stage1.py",
         ],
         "task_dep": ["run_stage0"],
         "file_dep": [
-            "./stage1/_run_stage1.py",
-            "./stage1/_stage1_settings.py",
-            "./stage1/create_daily_stage1.py",
-            "./stage1/stage1_pipeline.py",
-            "./stage1/helper_functions.py",
-            "./config.py",
+            "./src/stage1/_run_stage1.py",
+            "./src/stage1/_stage1_settings.py",
+            "./src/stage1/create_daily_stage1.py",
+            "./src/stage1/stage1_pipeline.py",
+            "./src/stage1/helper_functions.py",
+            "./src/config.py",
         ],
         "targets": ["./stage1/data/"],
         "clean": [],
@@ -240,10 +267,85 @@ def task_test_stage1_vs_open_source():
             OUTPUT_DIR / "test_results.xml",
         ],
         "file_dep": [
-            "./src/settings.py",
-            "./src/test_stage1_vs_open_source.py",
+            *SRC_PY_FILES,
             DATA_DIR / "pulled" / "corporate_bond_returns.parquet",
         ],
         "clean": [],
         "verbosity": 2,
+    }
+
+
+##################################
+## Notebook tasks
+##################################
+
+notebook_tasks = {
+    "01_data_sources_overview_ipynb": {
+        "path": "./src/01_data_sources_overview_ipynb.py",
+        "file_dep": [
+            DATA_DIR / "pulled" / "fisd_issue.parquet",
+            DATA_DIR / "pulled" / "fisd_issuer.parquet",
+        ],
+        "targets": [],
+    },
+}
+
+
+# fmt: off
+def task_run_notebooks():
+    """Preps the notebooks for presentation format.
+    Execute notebooks if the script version of it has been changed.
+    """
+    for notebook in notebook_tasks.keys():
+        pyfile_path = Path(notebook_tasks[notebook]["path"])
+        notebook_path = pyfile_path.with_suffix(".ipynb")
+        yield {
+            "name": notebook,
+            "actions": [
+                f"jupytext --to notebook --output {notebook_path} {pyfile_path}",
+                jupyter_execute_notebook(notebook_path),
+                jupyter_to_html(notebook_path),
+                mv(notebook_path, OUTPUT_DIR),
+            ],
+            "file_dep": [
+                pyfile_path,
+                *notebook_tasks[notebook]["file_dep"],
+            ],
+            "targets": [
+                OUTPUT_DIR / f"{notebook}.html",
+                *notebook_tasks[notebook]["targets"],
+            ],
+            "clean": True,
+            "verbosity": 2,
+        }
+# fmt: on
+
+
+sphinx_targets = [
+    "./docs/index.html",
+]
+
+
+def task_build_chartbook_site():
+    """Compile Sphinx Docs"""
+    notebook_scripts = [
+        Path(notebook_tasks[notebook]["path"])
+        for notebook in notebook_tasks.keys()
+    ]
+    file_dep = [
+        "./README.md",
+        "./chartbook.toml",
+        *notebook_scripts,
+    ]
+
+    return {
+        "actions": [
+            "chartbook build -f",
+        ],
+        "targets": sphinx_targets,
+        "file_dep": file_dep,
+        "task_dep": [
+            "run_notebooks",
+        ],
+        "clean": True,
     }

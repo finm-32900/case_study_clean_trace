@@ -5,5 +5,4 @@
 #$ -o stage0/logs/01_enhanced.out    # Log standard output
 #$ -e stage0/logs/01_enhanced.err    # Log standard error
 
-cd stage0
-python3 _run_enhanced_trace.py
+python3 ./src/stage0/_run_enhanced_trace.py

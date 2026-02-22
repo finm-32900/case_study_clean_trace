@@ -7,5 +7,4 @@
 #$ -o stage0/logs/_data_reports.out    # Log standard output
 #$ -e stage0/logs/_data_reports.err    # Log standard error
 
-cd stage0
-python3 _build_error_files.py
+python3 ./src/stage0/_build_error_files.py
