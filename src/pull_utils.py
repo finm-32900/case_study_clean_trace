@@ -86,6 +86,35 @@ def months_to_pull(
     return result
 
 
+def enforce_schema(
+    df: pl.DataFrame,
+    schema: dict[str, pl.DataType],
+) -> pl.DataFrame:
+    """Cast columns to their expected types.
+
+    WRDS sometimes returns all-string pandas DataFrames depending on the
+    database driver version.  This function normalises the column types so
+    that every partition written to disk has a consistent schema.
+
+    Only columns present in both *df* and *schema* are cast; extra columns
+    on either side are silently ignored.
+    """
+    casts = []
+    for col, target in schema.items():
+        if col not in df.columns or df.schema[col] == target:
+            continue
+        src = df.schema[col]
+        if target == pl.Date and src == pl.String:
+            casts.append(pl.col(col).str.to_date(strict=False))
+        elif target == pl.Time and src == pl.String:
+            casts.append(pl.col(col).str.to_time(strict=False))
+        else:
+            casts.append(pl.col(col).cast(target, strict=False))
+    if casts:
+        df = df.with_columns(casts)
+    return df
+
+
 def write_partition(
     df: pl.DataFrame,
     base_dir: Path,

@@ -13,7 +13,7 @@ from pathlib import Path
 
 from settings import config, get_start_date, get_end_date
 from wrds_utils import wrds_connection, query_polars
-from pull_utils import existing_partitions, months_to_pull, write_partition
+from pull_utils import existing_partitions, months_to_pull, write_partition, enforce_schema
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +72,15 @@ def pull_month(db, year: int, month: int) -> "pl.DataFrame":
         table=TABLE,
     )
     df = query_polars(db, sql, params={"start": start, "end": end})
+    df = enforce_schema(df, {
+        "trd_exctn_dt": pl.Date,
+        "trd_exctn_tm": pl.Time,
+        "rptd_pr": pl.Float64,
+        "yld_pt": pl.Float64,
+        "msg_seq_nb": pl.Float64,
+        "orig_msg_seq_nb": pl.Float64,
+        "orig_dis_dt": pl.Date,
+    })
     logger.info("Month %d-%02d: pulled %d rows", year, month, len(df))
     return df
 
