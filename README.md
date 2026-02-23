@@ -70,14 +70,112 @@ This will prompt for your WRDS username and password and create the `.pgpass` fi
 ### 5. Run the pipeline
 
 ```bash
-doit
+doit                    # Run the full pipeline
+doit list               # See all available tasks
+doit run_stage0         # Run only Stage 0 (data pulls + cleaning)
+doit run_stage1         # Run only Stage 1 (bond analytics)
 ```
 
-That's it. PyDoit handles all task dependencies, runs stages in the correct order, and skips tasks whose outputs are already up to date. To see all available tasks:
+PyDoit handles all task dependencies, runs stages in the correct order, and skips tasks whose outputs are already up to date.
+
+---
+
+## Running on RCC Midway3 (UChicago)
+
+Worker nodes on Midway3 do not have internet access, so data pulls (WRDS, Fama-French, etc.) cannot run inside a batch job. Instead, the instructor pulls data once on the head node, and students rsync it into their own project space before running the pipeline.
+
+### Instructor workflow (one-time setup)
+
+The instructor runs the data pull interactively on the Midway3 head node (which has internet access):
 
 ```bash
-doit list
+cd /project/finm32900/<instructor_username>/case_study_clean_trace
+module load python/anaconda-2024.10
+source activate /project/finm32900/<instructor_username>/envs/clean_trace
+doit pull
 ```
+
+This downloads all raw data to `_data/pulled/`. Students will rsync from this location.
+
+### Student workflow
+
+#### 1. Clone the repository into project space
+
+```bash
+cd /project/finm32900/${USER}
+git clone <this-repo-url> case_study_clean_trace
+cd case_study_clean_trace
+```
+
+Use `/project/` space (not `/home/`) to avoid inode quotas and take advantage of the larger storage allocation.
+
+#### 2. Set up your environment file
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and set your WRDS username and the desired date range:
+
+```
+WRDS_USERNAME="your_wrds_username"
+START_DATE=2002-07-01
+END_DATE=2025-12-31
+```
+
+#### 3. Create conda environment
+
+Do **not** pip install into the base Anaconda module -- the system-managed packages (pandas, numpy, etc.) will conflict with the versions this pipeline requires. Create an isolated conda environment in project space:
+
+```bash
+# Load conda (never run `conda init` on RCC -- use `source activate`)
+module load python/anaconda-2024.10
+
+# Create environment in project space (avoids home directory inode quota)
+conda create --prefix=/project/finm32900/${USER}/envs/clean_trace python=3.11 -y
+
+# Activate and install
+source activate /project/finm32900/${USER}/envs/clean_trace
+pip install -r requirements.txt
+```
+
+To reactivate in future sessions:
+
+```bash
+module load python/anaconda-2024.10
+source activate /project/finm32900/${USER}/envs/clean_trace
+```
+
+#### 4. Configure WRDS `.pgpass`
+
+If you haven't already set up passwordless WRDS authentication:
+
+```bash
+python -c "import wrds; db = wrds.Connection(); db.close()"
+```
+
+This will prompt for your WRDS username and password and create the `~/.pgpass` file. (This step requires the head node, which has network access to WRDS.)
+
+#### 5. Submit the batch job
+
+```bash
+sbatch run-pipeline.sbatch
+```
+
+The sbatch script automatically:
+1. Syncs pre-pulled data from the instructor's project directory to your `_data/pulled/`
+2. Marks all `pull` tasks as ignored (so doit does not attempt network downloads)
+3. Runs the full pipeline (build FISD universe, filter TRACE, Stage 0 cleaning, Stage 1 analytics)
+
+#### Monitoring your job
+
+```bash
+squeue -u ${USER}                                # Check job status
+tail -f <jobid>_clean-trace-pipeline.out         # Follow stdout
+tail -f <jobid>_clean-trace-pipeline.err         # Follow stderr
+```
+
+The job requests 16 CPUs with 128 GB total memory and an 8-hour time limit. Polars and Stage 1 automatically use all available cores.
 
 ---
 
@@ -102,6 +200,7 @@ All intermediate and derived data lives under `_data/` (reconstructible, not ver
 ```
 case_study_clean_trace/
 ├── dodo.py                  # PyDoit task definitions (the build system)
+├── run-pipeline.sbatch      # Slurm batch script for RCC Midway3
 ├── chartbook.toml           # Documentation site configuration
 ├── requirements.txt         # Python dependencies
 ├── .env.example             # Example environment variables

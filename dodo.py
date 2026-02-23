@@ -229,7 +229,6 @@ def task_filter_trace_fisd():
                 f"ipython ./src/filter_trace_fisd.py -- --DATASET={dataset}",
             ],
             "targets": _hive_targets(DATA_DIR, f"{dataset}_fisd", _MONTHS),
-            "task_dep": [f"pull:{dataset}"],
             "file_dep": [
                 "./src/settings.py",
                 "./src/clean_utils.py",
@@ -322,23 +321,12 @@ notebook_tasks = {
             DATA_DIR / "pulled" / "osbap_linker.parquet",
             DATA_DIR / "pulled" / "treasury_bond_returns.parquet",
         ],
-        "task_dep": [
-            "pull:trace_144a",
-            "pull:trace_enhanced",
-            "pull:trace_standard",
-        ],
         "targets": [],
     },
     "02_trace_cleaning_walkthrough_ipynb": {
         "path": "./src/02_trace_cleaning_walkthrough_ipynb.py",
         "file_dep": [
             DATA_DIR / "fisd_universe.parquet",
-        ],
-        "task_dep": [
-            "pull:trace_enhanced",
-            "filter_trace_fisd:trace_enhanced",
-            "run_stage0:enhanced",
-            "run_stage1",
         ],
         "targets": [],
     },
