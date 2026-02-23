@@ -63,9 +63,31 @@ def task_config():
     }
 
 
-def task_pull_fisd():
-    """Pull FISD reference data from WRDS"""
-    return {
+def task_pull():
+    """Pull all raw datasets from external sources"""
+
+    yield {
+        "name": "fama_french",
+        "doc": "Pull Fama-French SIC code classification files from Dartmouth",
+        "actions": [
+            "ipython ./src/settings.py",
+            "ipython ./src/pull_fama_french_sic.py",
+        ],
+        "targets": [
+            DATA_DIR / "pulled" / "ff17_sic_ranges.parquet",
+            DATA_DIR / "pulled" / "ff30_sic_ranges.parquet",
+        ],
+        "file_dep": [
+            "./src/settings.py",
+            "./src/pull_fama_french_sic.py",
+        ],
+        "clean": [],
+        "verbosity": 2,
+    }
+
+    yield {
+        "name": "fisd",
+        "doc": "Pull FISD reference data from WRDS",
         "actions": [
             "ipython ./src/settings.py",
             "ipython ./src/pull_fisd.py",
@@ -87,16 +109,65 @@ def task_pull_fisd():
         "verbosity": 2,
     }
 
+    yield {
+        "name": "liu_wu",
+        "doc": "Pull Liu-Wu zero-coupon Treasury yields from Google Sheets",
+        "actions": [
+            "ipython ./src/settings.py",
+            "ipython ./src/pull_liu_wu_yields.py",
+        ],
+        "targets": [
+            DATA_DIR / "pulled" / "liu_wu_yields.parquet",
+        ],
+        "file_dep": [
+            "./src/settings.py",
+            "./src/pull_liu_wu_yields.py",
+        ],
+        "clean": [],
+        "verbosity": 2,
+    }
 
-def task_pull_trace():
-    """Pull raw TRACE data from WRDS (Enhanced, Standard, 144A)"""
+    yield {
+        "name": "osbap",
+        "doc": "Pull open-source bond data from OpenBondAssetPricing.com",
+        "actions": [
+            "ipython ./src/settings.py",
+            "ipython ./src/pull_open_source_bond.py",
+        ],
+        "targets": [
+            DATA_DIR / "pulled" / "corporate_bond_returns.parquet",
+            DATA_DIR / "pulled" / "treasury_bond_returns.parquet",
+            DATA_DIR / "pulled" / "osbap_linker.parquet",
+        ],
+        "file_dep": [
+            "./src/settings.py",
+            "./src/pull_open_source_bond.py",
+        ],
+        "clean": [],
+        "verbosity": 2,
+    }
 
-    # Each subtask targets its hive-partitioned directory under DATA_DIR.
-    # Example file: _data/trace_enhanced/year=2024/month=01/data.parquet
+    yield {
+        "name": "trace_144a",
+        "doc": "Pull raw TRACE 144A from WRDS",
+        "actions": [
+            "ipython ./src/settings.py",
+            "ipython ./src/pull_trace_144a.py",
+        ],
+        "targets": [DATA_DIR / "pulled" / "trace_144a"],
+        "file_dep": [
+            "./src/settings.py",
+            "./src/wrds_utils.py",
+            "./src/pull_utils.py",
+            "./src/pull_trace_144a.py",
+        ],
+        "clean": [],
+        "verbosity": 2,
+    }
 
     yield {
         "name": "trace_enhanced",
-        "doc": "Pull raw trace_enhanced from WRDS",
+        "doc": "Pull raw TRACE Enhanced from WRDS",
         "actions": [
             "ipython ./src/settings.py",
             "ipython ./src/pull_trace_enhanced.py",
@@ -114,7 +185,7 @@ def task_pull_trace():
 
     yield {
         "name": "trace_standard",
-        "doc": "Pull raw trace_standard from WRDS",
+        "doc": "Pull raw TRACE Standard from WRDS",
         "actions": [
             "ipython ./src/settings.py",
             "ipython ./src/pull_trace_standard.py",
@@ -125,63 +196,6 @@ def task_pull_trace():
             "./src/wrds_utils.py",
             "./src/pull_utils.py",
             "./src/pull_trace_standard.py",
-        ],
-        "clean": [],
-        "verbosity": 2,
-    }
-
-    yield {
-        "name": "trace_144a",
-        "doc": "Pull raw trace_144a from WRDS",
-        "actions": [
-            "ipython ./src/settings.py",
-            "ipython ./src/pull_trace_144a.py",
-        ],
-        "targets": [DATA_DIR / "pulled" / "trace_144a"],
-        "file_dep": [
-            "./src/settings.py",
-            "./src/wrds_utils.py",
-            "./src/pull_utils.py",
-            "./src/pull_trace_144a.py",
-        ],
-        "clean": [],
-        "verbosity": 2,
-    }
-
-
-def task_pull_liu_wu():
-    """Pull Liu-Wu zero-coupon Treasury yields from Google Sheets"""
-    return {
-        "actions": [
-            "ipython ./src/settings.py",
-            "ipython ./src/pull_liu_wu_yields.py",
-        ],
-        "targets": [
-            DATA_DIR / "pulled" / "liu_wu_yields.parquet",
-        ],
-        "file_dep": [
-            "./src/settings.py",
-            "./src/pull_liu_wu_yields.py",
-        ],
-        "clean": [],
-        "verbosity": 2,
-    }
-
-
-def task_pull_fama_french():
-    """Pull Fama-French SIC code classification files from Dartmouth"""
-    return {
-        "actions": [
-            "ipython ./src/settings.py",
-            "ipython ./src/pull_fama_french_sic.py",
-        ],
-        "targets": [
-            DATA_DIR / "pulled" / "ff17_sic_ranges.parquet",
-            DATA_DIR / "pulled" / "ff30_sic_ranges.parquet",
-        ],
-        "file_dep": [
-            "./src/settings.py",
-            "./src/pull_fama_french_sic.py",
         ],
         "clean": [],
         "verbosity": 2,
@@ -221,6 +235,8 @@ def task_filter_trace_fisd():
                 "ipython ./src/settings.py",
                 f"ipython ./src/filter_trace_fisd.py -- --DATASET={dataset}",
             ],
+            "targets": [DATA_DIR / f"{dataset}_fisd"],
+            "task_dep": [f"pull:{dataset}"],
             "file_dep": [
                 "./src/settings.py",
                 "./src/clean_utils.py",
@@ -243,14 +259,16 @@ def task_run_stage0():
             "actions": [
                 f"python ./src/stage0/_run_{member}_trace.py",
             ],
-            "task_dep": ["filter_trace_fisd"],
+            "task_dep": [f"filter_trace_fisd:trace_{member}"],
             "file_dep": [
                 f"./src/stage0/_run_{member}_trace.py",
                 "./src/stage0/_trace_settings.py",
                 "./src/stage0/clean_trace_local.py",
                 "./src/config.py",
+                DATA_DIR / "fisd_universe.parquet",
+                DATA_DIR / "fisd_universe_offamt.parquet",
             ],
-            "targets": [f"./stage0/{member}/"],
+            "targets": [DATA_DIR / "stage0" / member],
             "clean": [],
             "verbosity": 2,
         }
@@ -260,7 +278,7 @@ def task_run_stage1():
     """Run Stage 1 analytics pipeline (duration, convexity, credit spreads)"""
     return {
         "actions": [
-            "mkdir -p stage1/data stage1/logs",
+            "mkdir -p _data/stage1 _data/logs/stage1 _output/stage1_reports",
             "python ./src/stage1/_run_stage1.py",
         ],
         "task_dep": ["run_stage0"],
@@ -282,28 +300,7 @@ def task_run_stage1():
             DATA_DIR / "pulled" / "ff17_sic_ranges.parquet",
             DATA_DIR / "pulled" / "ff30_sic_ranges.parquet",
         ],
-        "targets": ["./stage1/data/"],
-        "clean": [],
-        "verbosity": 2,
-    }
-
-
-def task_pull_open_source_bond():
-    """Pull open-source bond data from OpenBondAssetPricing.com"""
-    return {
-        "actions": [
-            "ipython ./src/settings.py",
-            "ipython ./src/pull_open_source_bond.py",
-        ],
-        "targets": [
-            DATA_DIR / "pulled" / "corporate_bond_returns.parquet",
-            DATA_DIR / "pulled" / "treasury_bond_returns.parquet",
-            DATA_DIR / "pulled" / "osbap_linker.parquet",
-        ],
-        "file_dep": [
-            "./src/settings.py",
-            "./src/pull_open_source_bond.py",
-        ],
+        "targets": [DATA_DIR / "stage1"],
         "clean": [],
         "verbosity": 2,
     }
@@ -337,8 +334,23 @@ notebook_tasks = {
     "01_data_sources_overview_ipynb": {
         "path": "./src/01_data_sources_overview_ipynb.py",
         "file_dep": [
+            DATA_DIR / "pulled" / "corporate_bond_returns.parquet",
+            DATA_DIR / "pulled" / "ff17_sic_ranges.parquet",
+            DATA_DIR / "pulled" / "ff30_sic_ranges.parquet",
+            DATA_DIR / "pulled" / "fisd_amt_out_hist.parquet",
             DATA_DIR / "pulled" / "fisd_issue.parquet",
             DATA_DIR / "pulled" / "fisd_issuer.parquet",
+            DATA_DIR / "pulled" / "fisd_ratings_moodys.parquet",
+            DATA_DIR / "pulled" / "fisd_ratings_sp.parquet",
+            DATA_DIR / "pulled" / "fisd_redemption.parquet",
+            DATA_DIR / "pulled" / "liu_wu_yields.parquet",
+            DATA_DIR / "pulled" / "osbap_linker.parquet",
+            DATA_DIR / "pulled" / "treasury_bond_returns.parquet",
+        ],
+        "task_dep": [
+            "pull:trace_144a",
+            "pull:trace_enhanced",
+            "pull:trace_standard",
         ],
         "targets": [],
     },
@@ -365,6 +377,7 @@ def task_run_notebooks():
                 pyfile_path,
                 *notebook_tasks[notebook]["file_dep"],
             ],
+            "task_dep": notebook_tasks[notebook].get("task_dep", []),
             "targets": [
                 OUTPUT_DIR / f"{notebook}.html",
                 *notebook_tasks[notebook]["targets"],

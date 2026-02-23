@@ -150,7 +150,7 @@ def get_local_config(kind: str) -> dict:
         fisd_universe_path = FISD_UNIVERSE_PATH,
         start_date       = START_DATE,
         end_date         = END_DATE,
-        out_dir          = PROJECT_ROOT / "stage0",  # data output: ./stage0/
+        out_dir          = DATA_DIR / "stage0",  # data output: ./_data/stage0/
         data_type        = kind,
         volume_filter    = ("dollar", 10000),
         trade_times      = ["00:00:00", "23:59:59"],

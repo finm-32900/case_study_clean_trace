@@ -35,8 +35,10 @@ DATE           = "" # Date of the data run
 
 # Can leave these blank for execution directory, e.g., ""
 # Or, put your path, e.g., for Windows: C:\Users\proj\
-IN_DIR         = Path(__file__).resolve().parent.parent.parent / "stage0"
-OUT_DIR        = Path(__file__).resolve().parent.parent.parent / "stage0"
+_PROJECT_ROOT  = Path(__file__).resolve().parent.parent.parent
+IN_DIR         = _PROJECT_ROOT / "_data" / "stage0"
+OUT_DIR        = _PROJECT_ROOT / "_output" / "stage0_reports"
+LOG_DIR        = _PROJECT_ROOT / "_data" / "logs" / "stage0"
 
 SUBPLOT_DIM    = (4, 2)# Leave this alone
 USE_LATEX_FONTS= False # Change to True, but your plots will take ages to render
@@ -393,8 +395,7 @@ def _resolve_args() -> dict:
     in_dir_base  = _as_path_or_cwd(cfg["in_dir"])
     out_dir_base = _as_path_or_cwd(cfg["out_dir"])
 
-    # All outputs must live under OUT_DIR/data_reports
-    report_dir = (out_dir_base / "data_reports")
+    report_dir = out_dir_base
     report_dir.mkdir(parents=True, exist_ok=True)
 
     # IMPORTANT: do NOT auto-fill today if user left DATE blank.
@@ -417,7 +418,7 @@ def main():
     wrds_user     = args.get("wrds_username") or ""
     data_types    = args["data_types"]
     
-    _setup_logger(base_out)
+    _setup_logger(LOG_DIR)
     _log_runtime_environment()
     date_disp = date_override if date_override else "(auto: RUN_STAMP)"
     logging.info("Resolved inputs -> date=%s | in_dir=%s | report_root=%s | types=%s",

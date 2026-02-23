@@ -67,6 +67,7 @@ def run_stage1(config: dict):
     pipeline_module.STAGE1_DIR = config["stage1_dir"]
     pipeline_module.STAGE1_DATA = config["stage1_data"]
     pipeline_module.LOG_DIR = config["log_dir"]
+    pipeline_module.REPORT_DIR = config["report_dir"]
 
     # Stage0 Input Files
     pipeline_module.STAGE0_DATE_STAMP = config["stage0_date_stamp"]
@@ -94,7 +95,7 @@ def run_stage1(config: dict):
     pipeline_module.PULLED_DIR = config["pulled_dir"]
 
     # Create directories (in case they don't exist yet)
-    for d in [config["stage1_dir"], config["stage1_data"], config["log_dir"]]:
+    for d in [config["stage1_dir"], config["stage1_data"], config["log_dir"], config["report_dir"]]:
         d.mkdir(parents=True, exist_ok=True)
 
     # Ensure sibling imports work for the dynamically-loaded pipeline module

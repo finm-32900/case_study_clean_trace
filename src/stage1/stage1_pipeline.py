@@ -48,7 +48,7 @@ tqdm.pandas()
 #
 # The following variables must be set before this module executes:
 # - AUTHOR
-# - ROOT_PATH, STAGE0_DIR, STAGE1_DIR, STAGE1_DATA, LOG_DIR, PULLED_DIR
+# - ROOT_PATH, STAGE0_DIR, STAGE1_DIR, STAGE1_DATA, LOG_DIR, REPORT_DIR, PULLED_DIR
 # - STAGE0_DATE_STAMP, TRACE_MEMBERS
 # - N_CORES, N_CHUNKS, DATE_CUT_OFF
 # - ULTRA_DISTRESSED_CONFIG, FINAL_FILTER_CONFIG
@@ -1562,7 +1562,7 @@ def step8b_build_distressed_report(
     logger.info("=" * 80)
 
     # Create output directory
-    report_dir = STAGE1_DATA / "data_reports"
+    report_dir = REPORT_DIR
     report_dir.mkdir(parents=True, exist_ok=True)
     logger.info("Report output directory: %s", report_dir)
 
@@ -2044,7 +2044,7 @@ def step10_generate_reports():
         raise RuntimeError("step10a_build_filter_tables() must be called before step10_generate_reports()")
     
     # Create reports directory
-    reports_dir = STAGE1_DIR / "data_reports"
+    reports_dir = REPORT_DIR
     reports_dir.mkdir(parents=True, exist_ok=True)
     
     # Create time-series data subdirectory for CSV exports

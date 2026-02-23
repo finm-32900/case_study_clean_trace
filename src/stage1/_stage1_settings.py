@@ -126,10 +126,11 @@ else:
     if str(ROOT_PATH).startswith("~"):
         ROOT_PATH = ROOT_PATH.expanduser()
 
-STAGE0_DIR = ROOT_PATH / "stage0"
-STAGE1_DIR = ROOT_PATH / "stage1"
-STAGE1_DATA = STAGE1_DIR / "data"
-LOG_DIR = STAGE1_DIR / "logs"
+STAGE0_DIR = ROOT_PATH / "_data" / "stage0"
+STAGE1_DIR = ROOT_PATH / "_data" / "stage1"
+STAGE1_DATA = STAGE1_DIR
+LOG_DIR = ROOT_PATH / "_data" / "logs" / "stage1"
+REPORT_DIR = ROOT_PATH / "_output" / "stage1_reports"
 
 # Path to pre-pulled data directory (created by `doit pull_*` tasks)
 PULLED_DIR = ROOT_PATH / "_data" / "pulled"
@@ -254,6 +255,7 @@ def get_config() -> dict:
         "stage1_dir": STAGE1_DIR,
         "stage1_data": STAGE1_DATA,
         "log_dir": LOG_DIR,
+        "report_dir": REPORT_DIR,
 
         # Input configuration
         "stage0_date_stamp": STAGE0_DATE_STAMP,

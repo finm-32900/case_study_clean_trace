@@ -58,7 +58,7 @@ COLUMN_MAP = [
 # Fixtures – load and merge once, share across all tests
 # ---------------------------------------------------------------------------
 def _find_stage1_file():
-    stage1_data_dir = BASE_DIR / "stage1" / "data"
+    stage1_data_dir = DATA_DIR / "stage1"
     stage1_files = sorted(stage1_data_dir.glob("stage1_*.parquet"))
     if not stage1_files:
         raise FileNotFoundError(
