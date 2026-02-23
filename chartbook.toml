@@ -27,6 +27,11 @@ notebook_name = "Data Sources Overview"
 notebook_description = "Quick look at each raw dataset pulled by the pipeline."
 notebook_path = "_output/01_data_sources_overview_ipynb.ipynb"
 
+[notebooks.02_trace_cleaning_walkthrough]
+notebook_name = "TRACE Cleaning Walkthrough"
+notebook_description = "1-hour lecture walkthrough of the TRACE corporate bond data cleaning pipeline."
+notebook_path = "_output/02_trace_cleaning_walkthrough_ipynb.ipynb"
+
 [dataframes]
 
 [dataframes.stage0_enhanced]

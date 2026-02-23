@@ -349,6 +349,19 @@ notebook_tasks = {
         ],
         "targets": [],
     },
+    "02_trace_cleaning_walkthrough_ipynb": {
+        "path": "./src/02_trace_cleaning_walkthrough_ipynb.py",
+        "file_dep": [
+            DATA_DIR / "fisd_universe.parquet",
+        ],
+        "task_dep": [
+            "pull:trace_enhanced",
+            "filter_trace_fisd:trace_enhanced",
+            "run_stage0:enhanced",
+            "run_stage1",
+        ],
+        "targets": [],
+    },
 }
 
 
