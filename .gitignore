@@ -85,8 +85,6 @@ logs/
 *.toc
 *.lof
 *.lot
-*.pdf
-!*_report.pdf
 
 # Figures (if you want to exclude them; remove if you want to commit)
 *.png

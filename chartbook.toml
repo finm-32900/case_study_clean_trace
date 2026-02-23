@@ -29,4 +29,64 @@ notebook_path = "_output/01_data_sources_overview_ipynb.ipynb"
 
 [dataframes]
 
+[dataframes.stage0_enhanced]
+dataframe_name = "Stage 0: Enhanced TRACE Daily Panel"
+short_description_df = "Clean daily bond prices from Enhanced TRACE (2002-present), Dick-Nielsen methodology."
+data_sources = ["WRDS TRACE Enhanced"]
+data_providers = ["FINRA via WRDS"]
+links_to_data_providers = ["https://wrds-www.wharton.upenn.edu/"]
+topic_tags = ["Corporate Bonds", "TRACE", "Daily Prices"]
+how_is_pulled = "SQL via wrds Python package"
+path_to_parquet_data = "./_data/stage0/enhanced/year=*/month=*/data.parquet"
+date_col = "trd_exctn_dt"
+dataframe_docs_path = "./docs_src/dataframes/stage0_enhanced.md"
+
+[dataframes.stage0_standard]
+dataframe_name = "Stage 0: Standard TRACE Daily Panel"
+short_description_df = "Clean daily bond prices from Standard TRACE (2024-present), Dick-Nielsen methodology."
+data_sources = ["WRDS TRACE Standard"]
+data_providers = ["FINRA via WRDS"]
+links_to_data_providers = ["https://wrds-www.wharton.upenn.edu/"]
+topic_tags = ["Corporate Bonds", "TRACE", "Daily Prices"]
+how_is_pulled = "SQL via wrds Python package"
+path_to_parquet_data = "./_data/stage0/standard/year=*/month=*/data.parquet"
+date_col = "trd_exctn_dt"
+dataframe_docs_path = "./docs_src/dataframes/stage0_standard.md"
+
+[dataframes.stage0_144a]
+dataframe_name = "Stage 0: Rule 144A TRACE Daily Panel"
+short_description_df = "Clean daily bond prices from Rule 144A TRACE (2002-present), Dick-Nielsen methodology."
+data_sources = ["WRDS TRACE 144A"]
+data_providers = ["FINRA via WRDS"]
+links_to_data_providers = ["https://wrds-www.wharton.upenn.edu/"]
+topic_tags = ["Corporate Bonds", "TRACE", "Daily Prices"]
+how_is_pulled = "SQL via wrds Python package"
+path_to_parquet_data = "./_data/stage0/144a/year=*/month=*/data.parquet"
+date_col = "trd_exctn_dt"
+dataframe_docs_path = "./docs_src/dataframes/stage0_144a.md"
+
+[dataframes.stage1]
+dataframe_name = "Stage 1: Enriched Daily Bond Analytics"
+short_description_df = "Daily bond dataset with QuantLib analytics, FISD characteristics, credit ratings, equity identifiers, and Fama-French industries."
+data_sources = ["WRDS TRACE", "WRDS FISD", "WRDS Ratings", "Liu-Wu Yields", "OSBAP Linker"]
+data_providers = ["FINRA via WRDS", "Mergent via WRDS", "S&P/Moody's via WRDS"]
+links_to_data_providers = ["https://wrds-www.wharton.upenn.edu/", "https://openbondassetpricing.com/"]
+topic_tags = ["Corporate Bonds", "Bond Analytics", "Duration", "Credit Spreads", "Ratings"]
+how_is_pulled = "SQL via wrds Python package + web downloads"
+path_to_parquet_data = "./_data/stage1/stage1_*.parquet"
+date_col = "trd_exctn_dt"
+dataframe_docs_path = "./docs_src/dataframes/stage1.md"
+
+# Stage 2 is in development; uncomment when the pipeline produces output.
+# [dataframes.stage2]
+# dataframe_name = "Stage 2: Monthly Panel with Factor Signals"
+# short_description_df = "Monthly bond panel with 50+ characteristic signals for asset pricing research."
+# data_sources = ["Stage 1 Output"]
+# data_providers = ["Derived"]
+# topic_tags = ["Corporate Bonds", "Factor Signals", "Monthly Panel"]
+# how_is_pulled = "Derived from Stage 1"
+# path_to_parquet_data = "./_data/stage2/year=*/month=*/data.parquet"
+# date_col = "date"
+# dataframe_docs_path = "./docs_src/dataframes/stage2.md"
+
 [charts]

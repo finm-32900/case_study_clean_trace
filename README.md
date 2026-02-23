@@ -1,636 +1,178 @@
-Below is the original README for the [TRACE Data Pipeline](https://github.com/Alexander-M-Dickerson/trace-data-pipeline) project, a comprehensive pipeline for processing TRACE corporate bond transaction data.
+# Clean TRACE: Corporate Bond Transaction Data Pipeline
 
-The motivation for this fork is to run the pipeline on a SLURM cluster, and specifically, [The Unversity of Chicago's Research Computing Center](https://rcc.uchicago.edu/) Midway3 cluster.
-
-The `main` branch is intended to be a version of the original repository that can be run on a SLURM cluster without multiprocessing, while the `multiprocess` branch introduces multiprocessing to reduce runtime. This allows for flexibility in execution environments, as some users may not have access to a cluster with multiprocessing capabilities or may prefer to run the pipeline without multiprocessing for other reasons (e.g., resource constraints).
-
-This fork modifies the original repository in the following ways:
-
-### `main` Branch
-
-* Implementation of `python-decouple` to handle environment variables, specifically for the WRDS username, author name, and email address.
-* Logging the execution time for each filter in the `clean_trace_data` function. This logging led to understanding the runtimes for each of the chunk filters and informed the modifications made to the `multiprocess` branch.
-* The `run_pipeline.sh` script has been modified as follows:
-
-  1. The disk capacity check has been disabled (commented out).
-  2. The "qsub" sections have been removed and replaced with "wait" bash commands for the stage 0 and stage 1 dependencies.
-
-* The required `sbatch` file for scheduling on SLURM.
-* The script to submit the `sbatch` file to SLURM.
-
-Additional notes:
-
-* Executing the `main` branch pipeline on the Midway3 "build" partition will result in failure due to the 6 hour wall time limit imposed by the build partition.
-
-### `multiprocess` Branch
-
-The `multiprocess` branch includes the above changes to the `main` branch, and the following additional modifications to introduce multiprocessing:
-
-* The `_pull_all_chunks` function pulls all chunk data from WRDS sequentially and exports each chunk to a parquet file.
-* The `_f1_proc` function reads the parquet files from above, runs the initial cleaning and "Filter 1: Dick-Nielsen", and exports the resulting `trace`, `audit_records`, and `ct_audit_records` DataFrames as parquet files, individually for each chunk.
-* The `clean_trace_data` function reads the parquet files from above, and executes the remaining filters.
-* In order to run the processes in parallel, there are 5 CPUs required to take advantage of the multiprocessing, which are allocated as follows:
-
-  1. Initial execution of `run_pipeline.sh` -> then `run_enhanced_trace.sh` -> then `clean_trace_data` function.
-  2. `_pull_all_chunks` function (within the `clean_trace_data` function).
-  3. `_f1_proc` function (within the `clean_trace_data` function).
-  4. `run_standard_trace.sh` script.
-  5. `run_144a_trace.sh` script.
-
-Additional notes:
-
-* Unfortunately, due to the multiprocessing, the `trace_enhanced.log` is not fully sequential and contains interwoven messages from the different processes. However, the exported audit data has been sequenced properly within each process.
-* The multiprocessing implementation requires caching ~5 GB of data in parquet files at any given time. The parquet files are automatically deteleted after they are read in the next step of the process, but users should ensure they have sufficient disk space in their home directory to handle this temporary data.
-
-### Quick Start
-
-Executing the pipeline is as simple as:
-
-1. Login to RCC.
-2. Clone the repository to your home directory.
-3. Create the `.env` file (example provided in `.env.example`).
-4. Create virtual environment and install dependencies (if not using the virtual environment provided in the `sbatch` files).
-5. Create `.pgpass` file for WRDS access, by running:
-
-```bash
-$ module load python/3.11.9
-$ python  
->>> import wrds 
->>> db = wrds.Connection() 
-Enter your WRDS username: <username> 
-Enter your WRDS password: 
-Created WRDS pgpass file 
->>> db.close() 
->>> exit()
-```
-
-6. Checkout the `main` or `multiprocess` branch (based on use case above):
-
-```bash
-$ git checkout main # or multiprocess
-```
-
-7. Navigate to the project directory and run the following to to submit the job to SLURM and execute the pipeline:
-
-```bash
-$ ./submit_trace_pipeline.sh
-```
-
-8. Check the status of the job with:
-
-```bash
-$ myq
-```
-
-9. To follow the output of the individual log files for each process in the `stage0/logs/` directory, use the following command:
-
-```bash
-$ tail -f stage0/logs/trace_enhanced.log # or trace_standard.log or trace_144a.log
-```
-
-10. To view the complete log file during or after the process has completed, use the following command:
-
-```bash
-$ less stage0/logs/trace_enhanced.log # or trace_standard.log or trace_144a.log
-```
-
-# TRACE Data Pipeline (Original README)
-
-A comprehensive, pipeline for processing Enhanced, Standard and 144A TRACE (Trade Reporting and Compliance Engine) corporate bond transaction data. 
-It is apart of the [Open Bond Asset Pricing project](https://openbondassetpricing.com/).
-This pipeline implements cleaning procedures and error-correction algorithms to produce *high-quality, reproducible* daily and monthly corporate bond panels from raw TRACE transaction data.
-The companion repository is [PyBondLab](https://github.com/GiulioRossetti94/PyBondLab/tree/main/examples) which can be used to form corporate bond asset pricing factors.
-
-[![Website](https://img.shields.io/badge/Website-Visit-blue?logo=google-chrome&logoColor=white)](https://openbondassetpricing.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Stage 0](https://img.shields.io/badge/Stage%200-Public%20Beta-green)](docs_src/stage0.md)
-[![Stage 1](https://img.shields.io/badge/Stage%201-Public%20Beta-green)](docs_src/stage1.md)
-[![Stage 2](https://img.shields.io/badge/Stage%202-December%202025-orange)](docs_src/default_returns.md)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
-[📄 Link to paper](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4575879)
----
+This repository is a restructured fork of the [TRACE Data Pipeline](https://github.com/Alexander-M-Dickerson/trace-data-pipeline) by Alexander Dickerson, Cesare Robotti, and Giulio Rossetti, part of the [Open Bond Asset Pricing](https://openbondassetpricing.com/) project. It has been reorganized by **Jeremiah Bejarano** to use [PyDoit](https://pydoit.org/) for task orchestration, Polars-based hive partitioning for incremental data processing, and a clean `_data/` + `_output/` directory layout.
 
-## Overview
-
-This is a **three-stage pipeline** for building *clean, reliable and reproducible* TRACE corporate bond datasets. 
-
-### Stage 0: Intraday to Daily Processing  **PUBLIC BETA**
-Processes raw intraday TRACE transaction data to clean daily panels. Handles three types of TRACE data:
-- **Enhanced TRACE**
-- **Standard TRACE**
-- **Rule 144A bonds**
-
-**Automated workflow:** Run `./run_pipeline.sh` from the project ROOT to execute the complete multi-stage pipeline with automatic job dependencies. Stage 0 jobs run in parallel, then automatically chain to Stage 1 processing when complete.
-
-**Status:** Public beta - fully functional and ready for testing
-**Execution:** WRDS Cloud or your home machine (WRDS subscription required)
-**Documentation:** See [Stage 0 Guide](docs_src/stage0.md) and [Stage 0 Quick Start](docs_src/stage0_quickstart.md)
-
-### Stage 1: Daily Bond Analytics  **PUBLIC BETA**
-Enriches Stage 0 daily panels with comprehensive bond analytics and characteristics:
-- **Bond analytics** via QuantLib (duration, convexity, YTM, credit spreads)
-- **Credit ratings** from S&P and Moody's with numeric conversions
-- **Equity identifiers** equity linkers
-- **FISD bond characteristics** (coupon, maturity, issuer, amount outstanding, etc.)
-- **Fama-French industry classifications** (17 and 30 industries)
-- **Ultra-distressed filters** to flag potentially erroneous prices
-
-**Status:** Public beta - fully functional and ready for testing
-**Execution:** WRDS Cloud or your home machine (WRDS subscription required)
-**Documentation:** See [Stage 1 Guide](docs_src/stage1.md) and [Stage 1 Quick Start](docs_src/stage1_quickstart.md)
-
-### Stage 2: Monthly Panel with Factor Signals  **IN DEVELOPMENT**
-Produces a clean, error-corrected monthly panel with dozens of corporate bond signals for asset pricing research:
-- 50+ bond characteristic signals
-- Credit risk factors
-- Liquidity measures
-- Momentum and reversal signals
-- Carry and value signals
-- Ready-to-use for monthly portfolio construction -- see [PyBondLab](https://github.com/GiulioRossetti94/PyBondLab/tree/main/examples)
-
-**Status:** In development
-**Release:** Coming soon
-**Execution:** WRDS Cloud or your home machine (WRDS subscription required)
+All of the core cleaning logic, filters, and bond analytics originate from Dickerson et al. This fork restructures the execution framework while preserving the underlying methodology.
 
 ---
 
-## Project Status & Timeline
+## Why This Pipeline Matters
 
-- **Stage 0**: ✅ **Now available** - Public beta, ready for testing
-- **Stage 1**: ✅ **Now available** - Public beta, ready for testing
-- **Stage 2**: 🚧 **Coming soon** - In development
+TRACE (Trade Reporting and Compliance Engine) is the primary source of U.S. corporate bond transaction data, but the raw data contains numerous errors: decimal-shifted prices, duplicate reports, cancelled and corrected trades, and erroneous spikes. Producing research-quality bond panels requires systematic cleaning.
 
-**This project is under active development and any feedback is greatly appreciated.**
-Please reach out to `alexander.dickerson1@unsw.edu.au` if you would like to collaborate or beta test.
+This pipeline implements the Dick-Nielsen (2009, 2014) cancellation, correction, and reversal filters, the van Binsbergen, Nozawa & Schwert (2025) filters, a decimal-shift corrector, a bounce-back filter, and agency trade de-duplication, among other steps. It then enriches the cleaned data with bond analytics (duration, convexity, yields, credit spreads) via QuantLib, credit ratings, FISD bond characteristics, and Fama-French industry classifications. The result is a clean daily corporate bond panel ready for asset pricing research.
 
----
-
-## Key Features
-
-### Stage 0: Robust Error Correction
-- **Decimal-shift corrector**: Automatically detects and fixes multiplicative price errors (10x, 0.1x, 100x, 0.01x)
-- **Bounce-back filter**: Identifies and removes erroneous price spikes that revert quickly
-- Algorithms designed by Dickerson, Robotti & Rossetti (2025) account for TRACE idiosyncrasies
-- **Full documentation**: See [Decimal Shift Corrector](docs_src/decimal_shift_corrector.md) and [Bounce-Back Filter](docs_src/bounce_back_filter.md)
-
-
-### Stage 0: Comprehensive Data Cleaning
-- Dick-Nielsen (2009, 2014) cancellation, correction, and reversal filters
-- van Binsbergen, Nozawa and Schwert (2025) filters
-- Agency trade de-duplication
-- Pre-2012 and post-2012 cleaning rules
-- Price range filters and volume screens
-- Trading calendar and time-of-day filters
-
-### Stage 0: Quality Assurance & Reporting
-- Transaction-level audit logs for every filter stage
-- CUSIP-level lists of corrected bonds
-- LaTeX reports with detailed filtering statistics
-- Optional time-series plots for visual inspection (can generate 500+ page reports)
-- Row count reconciliation at each processing stage
-
-### Stage 0: Daily Aggregation Metrics
-- **Price metrics**: Equal-weighted, volume-weighted, par-weighted, first, last, trade count
-- **Volume metrics**: Par volume and dollar volume (in millions)
-- **Bid/Ask metrics**: Value-weighted bid and ask prices
-
-### Stage 1: Bond Analytics
-- **Bond characteristics** from FISD (maturity, coupon, offering amount, issuer, security features)
-- **Computed bond analytics** via QuantLib (duration, convexity, yields, credit spreads, accrued interest)
-- **Credit ratings** from S&P and Moody's with numeric conversions
-- **External identifiers** 
-- **Ultra-distressed bond filters** to flag potentially erroneous prices
-- **Fama-French industry classifications** (17 and 30 industry groups)
-- Produces comprehensive daily bond-level dataset with 50+ variables
-- Ultra-distressed filter catches suspiciupus "rounded" price numbers at very low prices often associated with issues trading under default. See [Distressed Filter](docs_src/distressed_filter.md)
+For full details on the methodology, see Dickerson, Robotti & Rossetti (2025), "[Common Pitfalls in the Evaluation of Corporate Bond Strategies](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4575879)."
 
 ---
 
 ## Quick Start
 
-### Prerequisites
-- WRDS subscription with access to TRACE, FISD, and ratings data
-- Python 3.10 or higher (tested on Python 3.12.11)
-- SSH access to WRDS Cloud (or local Python environment)
-- `.pgpass` configured for passwordless WRDS authentication
+### 1. Clone the repository
 
-### 3-Step Setup
-
-1. **Clone the repository:**
 ```bash
-# On WRDS Cloud
-ssh <your_wrds_id>@wrds-cloud.wharton.upenn.edu
-cd ~
-git clone https://github.com/Alexander-M-Dickerson/trace-data-pipeline.git
-cd trace-data-pipeline
+git clone <this-repo-url>
+cd case_study_clean_trace
 ```
 
-**Configure WRDS username and author** (choose one method):
+### 2. Set up your environment file
 
-**Option A — Environment variable (recommended):**
 ```bash
-export WRDS_USERNAME="your_wrds_id"
-echo 'export WRDS_USERNAME="your_wrds_id"' >> ~/.bashrc  # Make persistent
+cp .env.example .env
 ```
 
-**Option B — Edit `config.py`:**
-```bash
-nano config.py
-# Change: WRDS_USERNAME = os.getenv("WRDS_USERNAME", "your_wrds_id")
-# Change: AUTHOR = "Your Name"  # Default is "Open Source Bond Asset Pricing"
+Edit `.env` and fill in your WRDS credentials:
+
+```
+WRDS_USERNAME="your_wrds_id"
+AUTHOR="Your Name"
 ```
 
-*Note: Password comes from `.pgpass`, not code.*
+To limit the pipeline to a specific date range (useful for testing or quicker runs), uncomment and set:
 
-2. **Install Stage 1 dependencies:**
-```bash
-# Stage 0 uses system Python (no installation needed)
-# Stage 1 requires additional packages
-python -m pip install --user -r requirements.txt
+```
+START_DATE=2024-01-01
+END_DATE=2024-02-28
 ```
 
-3. **Run the complete pipeline:**
+### 3. Create a conda environment and install dependencies
+
 ```bash
-chmod +x run_pipeline.sh
-./run_pipeline.sh
+conda create -n clean_trace python=3.11 -y
+conda activate clean_trace
+pip install -r requirements.txt
 ```
 
-**What happens:**
-1. **Pre-stage**: Auto-downloads required data files (Liu-Wu yields, OSBAP linker, FF industries)
-2. **Stage 0**: Submits 3 parallel jobs (Enhanced, Standard, 144A TRACE)
-3. **Stage 0 Reports**: Auto-generates when all TRACE jobs complete
-4. **Stage 1**: Auto-starts after Stage 0 reports finish
-5. **Total runtime**: ~7 hours on WRDS Cloud
+### 4. Ensure WRDS `.pgpass` is configured
 
-**Automated features:**
-- ✅ Data downloads (no manual wget required)
-- ✅ Job dependencies (stages run in correct order)
-- ✅ Configuration auto-detection (STAGE0_DATE_STAMP, ROOT_PATH, N_CORES)
-- ✅ Centralized settings (`config.py` for shared settings)
+If you haven't already set up passwordless WRDS authentication:
 
-**For detailed instructions:**
-- **Quick Start**: See [Quick Start Guide](docs_src/quickstart.md) for complete walkthrough
-- **Stage 0**: See [Stage 0 Guide](docs_src/stage0.md) or [Stage 0 Quick Start](docs_src/stage0_quickstart.md)
-- **Stage 1**: See [Stage 1 Guide](docs_src/stage1.md) or [Stage 1 Quick Start](docs_src/stage1_quickstart.md)
+```bash
+python -c "import wrds; db = wrds.Connection(); db.close()"
+```
+
+This will prompt for your WRDS username and password and create the `.pgpass` file.
+
+### 5. Run the pipeline
+
+```bash
+doit
+```
+
+That's it. PyDoit handles all task dependencies, runs stages in the correct order, and skips tasks whose outputs are already up to date. To see all available tasks:
+
+```bash
+doit list
+```
 
 ---
 
-## Documentation
+## Pipeline Overview
 
-**Stage 0 - TRACE Data Processing:**
-- **[Stage 0 Guide](docs_src/stage0.md)**: Complete guide for intraday to daily TRACE processing
-- **[Stage 0 Quick Start](docs_src/stage0_quickstart.md)**: Fast-track guide to get started quickly
-- **[Configuration Guide](docs_src/stage0.md#configuration-choices-you-can-edit)**: All configurable parameters
-- **[Troubleshooting](docs_src/stage0.md#troubleshooting)**: Common issues and solutions
+The pipeline is orchestrated by `dodo.py` and proceeds in stages:
 
-**Stage 1 - Bond Analytics:**
-- **[Stage 1 Guide](docs_src/stage1.md)**: Complete guide for bond analytics and enrichment
-- **[Stage 1 Quick Start](docs_src/stage1_quickstart.md)**: Fast-track guide to get started quickly
-- **[Configuration Guide](docs_src/stage1.md#configuration-choices-you-can-edit)**: All configurable parameters
-- **[Troubleshooting](docs_src/stage1.md#troubleshooting)**: Common issues and solutions
+**Data Pulls** — Downloads raw data from WRDS (TRACE Enhanced, Standard, 144A, FISD, credit ratings, Liu-Wu yields, Fama-French industries, OSBAP linker). Data is stored in hive-partitioned Parquet files under `_data/pulled/`.
 
-**Stage 2 - Monthly Panel:**
-- Coming soon
+**FISD Universe** — Builds a reference universe of bonds from FISD and filters TRACE transactions to bonds in that universe.
 
----
+**Stage 0: Cleaning** — Applies the full suite of Dick-Nielsen and related filters to produce clean daily bond panels. Each month is processed independently to manage memory. Output goes to `_data/stage0/`.
 
-## Downloading Results to Your Local Machine
+**Stage 1: Analytics** — Enriches the cleaned data with QuantLib bond analytics (duration, convexity, YTM, credit spreads), credit ratings, FISD characteristics, and Fama-French industry classifications. Output goes to `_data/stage1/`.
 
-The pipeline generates a large folder (~6 GB) with hundreds of files. **Zip the folder first**, then download a single file for reliability and speed.
-
-### Quick Overview
-
-1. **SSH into WRDS** and zip to scratch space (avoids home directory quota):
-   ```bash
-   ssh {wrds_username}@wrds-cloud.wharton.upenn.edu
-   cd /scratch/{institution}/
-   zip -r trace-data-pipeline.zip ~/trace-data-pipeline/
-   ```
-
-2. **Download the zip** (from your LOCAL machine):
-   ```bash
-   scp {wrds_username}@wrds-cloud.wharton.upenn.edu:/scratch/{institution}/trace-data-pipeline.zip "{local_destination}"
-   ```
-
-3. **Extract locally**:
-   - **Windows**: Right-click → Extract All
-   - **Mac**: Double-click the zip file
-   - **Linux**: `unzip trace-data-pipeline.zip`
-
-**For detailed instructions** (including Windows GUI options): See [Quick Start Guide](docs_src/quickstart.md#download-results-to-your-local-machine)
-
-| Placeholder | Description | Example |
-|-------------|-------------|---------|
-| `{wrds_username}` | Your WRDS username | `jsmith` |
-| `{institution}` | Your institution's scratch folder | `wharton`, `chicago`, `nyu` |
-| `{local_destination}` | Local path | `~/Downloads` or `C:\Users\YourName\Downloads` |
+All intermediate and derived data lives under `_data/` (reconstructible, not version-controlled). Reports and notebooks go to `_output/`.
 
 ---
 
 ## Repository Structure
 
 ```
-trace-data-pipeline/
-├── LICENSE                           # MIT License
-├── README.md                         # This file
-├── CONTRIBUTING.md                   # Contribution guidelines
-├── CHANGELOG.md                      # Version history
-├── chartbook.toml                    # Pipeline & dataset registry
-├── dodo.py                           # PyDoit task orchestrator
-├── requirements.txt                  # Python dependencies
-├── .gitignore
+case_study_clean_trace/
+├── dodo.py                  # PyDoit task definitions (the build system)
+├── chartbook.toml           # Documentation site configuration
+├── requirements.txt         # Python dependencies
+├── .env.example             # Example environment variables
+├── LICENSE                  # MIT License (Alexander Dickerson)
 │
-├── docs_src/                         # Documentation
-│   ├── quickstart.md                 # Quick start guide
-│   ├── faq.md                        # Frequently asked questions
-│   ├── stage0.md                     # Stage 0 guide
-│   ├── stage0_quickstart.md          # Stage 0 quick start
-│   ├── bounce_back_filter.md         # Bounce-back filter algorithm
-│   ├── decimal_shift_corrector.md    # Decimal shift correction algorithm
-│   ├── stage1.md                     # Stage 1 guide
-│   ├── stage1_quickstart.md          # Stage 1 quick start
-│   ├── distressed_filter.md          # Ultra-distressed filter algorithm
-│   ├── default_returns.md            # Default handling in returns
-│   ├── dataframes/                   # Data dictionaries
-│   │   ├── stage0_enhanced.md        # Enhanced TRACE data dictionary
-│   │   ├── stage0_standard.md        # Standard TRACE data dictionary
-│   │   ├── stage0_144a.md            # 144A TRACE data dictionary
-│   │   ├── stage1.md                 # Stage 1 data dictionary
-│   │   └── stage2.md                 # Stage 2 data dictionary
-│   └── charts/                       # Chart documentation (future)
+├── src/                     # All source code
+│   ├── config.py            # Shared pipeline configuration
+│   ├── settings.py          # Environment/CLI config loader
+│   ├── pull_*.py            # Data pull scripts (7 sources)
+│   ├── build_fisd_universe.py
+│   ├── filter_trace_fisd.py
+│   ├── stage0/              # Stage 0: Dick-Nielsen cleaning
+│   └── stage1/              # Stage 1: Bond analytics
 │
-├── src/                              # Source code
-│   ├── stage0/                       # Stage 0 processing
-│   └── stage1/                       # Stage 1 processing
+├── docs_src/                # Documentation source (markdown)
 │
-├── _data/                            # Data (auto-created, not versioned)
-│   ├── pulled/                       # Raw data from WRDS
-│   ├── stage0/                       # Stage 0 output (hive-partitioned)
-│   │   ├── enhanced/year=*/month=*/  # Enhanced TRACE
-│   │   ├── standard/year=*/month=*/  # Standard TRACE
-│   │   └── 144a/year=*/month=*/      # 144A TRACE
-│   └── stage1/                       # Stage 1 output
-│       └── stage1_YYYYMMDD.parquet   # Enriched dataset
+├── _data/                   # All data (generated, not version-controlled)
+│   ├── pulled/              # Raw data from WRDS
+│   ├── stage0/              # Cleaned daily panels
+│   └── stage1/              # Enriched analytics
 │
-└── _output/                          # Reports & notebooks (not versioned)
+└── _output/                 # Reports, notebooks, test results
 ```
 
 ---
 
-## Output Data Structure
+## Configuration
 
-### Stage 0 Output: Daily TRACE Panels
-
-Stage 0 produces daily panels in dataset-specific subfolders with the following structure:
-
-**File locations:**
-- `enhanced/enhanced_YYYYMMDD.parquet`
-- `standard/standard_YYYYMMDD.parquet`
-- `144a/144a_YYYYMMDD.parquet`
-
-**Quality reports location:**
-- `data_reports/enhanced/` - Enhanced TRACE reports
-- `data_reports/standard/` - Standard TRACE reports
-- `data_reports/144a/` - Rule 144A reports
-
-**Column structure:**
-
-| Column | Description |
-|--------|-------------|
-| `cusip_id` | 9-character CUSIP identifier |
-| `trd_exctn_dt` | Trade execution date |
-| `prc_ew` | Equal-weighted price |
-| `prc_vw` | Volume-weighted price (dollar) |
-| `prc_vw_par` | Volume-weighted price (par) |
-| `prc_first` | First trade price of day |
-| `prc_last` | Last trade price of day |
-| `trade_count` | Number of trades |
-| `qvolume` | Par volume (millions) |
-| `dvolume` | Dollar volume (millions) |
-| `prc_bid` | Dealer bid (value-weighted) |
-| `prc_ask` | Dealer ask (value-weighted) |
-| `prc_lo` | Low price of the day |
-| `prc_hi` | High price of the day |
-| `bid_count` | Number of buys |
-| `ask_count` | Number of sells |
-
-**Expected output size:**
-- Enhanced TRACE (2002-present): ~30 million rows
-- Standard TRACE (2024-present): ~2-3 million rows
-- Rule 144A (2002-present): ~5-8 million rows
-
-**Additional outputs:**
-- Audit files documenting filter effects (in dataset subfolders)
-- CUSIP lists of bonds with corrections (in dataset subfolders)
-- Data quality reports with LaTeX + figures (in `data_reports/` subfolder)
-
-### Stage 1 Output
-
-**File location:** `stage1/data/stage1_YYYYMMDD.parquet`
-
-**Structure:** Panel data with one row per (cusip_id, trd_exctn_dt) combination
-
-**Output size:** ~500MB-2GB (depending on time period and datasets included)
-
-**Data download:** Available in zipped parquet format on [Open Bond Asset Pricing](https://openbondassetpricing.com/data)
-
-**Column structure (43 columns):**
-
-#### Identifiers
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `cusip_id` | category | 9-character CUSIP identifier |
-| `issuer_cusip`* | category | 6-character issuer CUSIP |
-| `permno` | Int32 | CRSP PERMNO equity identifier |
-| `permco` | Int32 | CRSP PERMCO company identifier |
-| `gvkey`† | Int32 | Compustat GVKEY identifier |
-| `trd_exctn_dt` | datetime | Trade execution date |
-
-#### Computed Bond Analytics (QuantLib)
-
-All prices are in **percentage of par** (e.g., 99 = 99% of par = $990 for a $1,000 principal bond).
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `pr` | float32 | Volume-weighted clean price (% of par) |
-| `prfull` | float32 | Dirty price = pr + acclast (% of par) |
-| `acclast` | float32 | Accrued interest — pure time-accrued interest component |
-| `accpmt` | float32 | Accumulated coupon payments since issue |
-| `accall` | float32 | Accumulated payments — includes cash flows + accrued interest; used for return calculations |
-| `ytm` | float64 | Yield to maturity (annualized) |
-| `mod_dur` | float32 | Modified duration (years) |
-| `mac_dur` | float32 | Macaulay duration (years) |
-| `convexity` | float32 | Bond convexity |
-| `bond_maturity` | float32 | Time to maturity (years) |
-| `credit_spread` | float64 | Credit spread over duration-matched Treasury yield |
-
-#### TRACE Pricing (from Stage 0)
-
-All prices are in **percentage of par**.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `prc_ew` | float32 | Equal-weighted price |
-| `prc_vw_par` | float32 | Par volume-weighted price |
-| `prc_first` | float32 | First trade price of day |
-| `prc_last` | float32 | Last trade price of day |
-| `prc_hi` | float32 | High price of the day |
-| `prc_lo` | float32 | Low price of the day |
-| `trade_count` | Int16 | Number of trades |
-| `time_ew`‡ | float32 | Average trade time (seconds after midnight) |
-| `time_last`‡ | Int32 | Last trade time (seconds after midnight) |
-| `qvolume` | float32 | Par volume (millions USD) |
-| `dvolume` | float32 | Dollar volume (millions USD) |
-
-#### Dealer Bid/Ask Metrics
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `prc_bid` | float32 | Dealer bid price, value-weighted (% of par) |
-| `bid_last` | float32 | Last dealer bid price of day (% of par) |
-| `bid_time_ew`‡ | float32 | Average dealer bid time (seconds after midnight) |
-| `bid_time_last`‡ | Int32 | Last dealer bid time (seconds after midnight) |
-| `prc_ask` | float32 | Dealer ask price, value-weighted (% of par) |
-| `bid_count`‡ | Int16 | Number of dealer buys (can be NaN) |
-| `ask_count`‡ | Int16 | Number of dealer sells (can be NaN) |
-
-#### Database Source
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `db_type` | Int8 | Source database: 1=Enhanced, 2=Standard, 3=144A |
-
-#### Bond Characteristics (from FISD)
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `coupon`* | float32 | Annual coupon rate (%) |
-| `principal_amt`* | Int16 | Principal amount per bond (typically $1,000) |
-| `bond_age` | float32 | Bond age since issuance (years) |
-| `bond_amt_outstanding` | Int64 | Units of the bond outstanding |
-| `callable`* | Int8 | Callable flag: 1=callable, 0=not callable |
-
-#### Industry Classifications
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `ff17num` | int8 | Fama-French 17 industry classification |
-| `ff30num` | int8 | Fama-French 30 industry classification |
-
-#### Credit Ratings
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `sp_rating`† | Int8 | S&P credit rating (1-22, where 22=default) |
-| `sp_naic`* | Int8 | S&P NAIC category (1-6) |
-| `mdy_rating`† | Int8 | Moody's credit rating (1-21, where 21=default) |
-| `spc_rating`† | Int8 | S&P composite rating (1-22); missing values filled with mdy_rating (scaled to 22 for default) |
-| `mdc_rating`† | Int8 | Moody's composite rating (1-22); missing values filled with sp_rating (scaled to 21 for default) |
-| `comp_rating`* | float64 | Average of spc_rating and mdc_rating |
-
-**Notes:**
-- \*Columns marked with asterisk are not included in the output file but can be obtained by merging with FISD data in `stage0/enhanced/trace_enhanced_fisd_YYYYMMDD.parquet`
-- †Columns marked with dagger are excluded from the public download due to proprietary data restrictions
-- ‡Columns marked with double dagger are excluded from the public download to reduce file size
-- All `prc_*` prices are in percentage of par (99 = 99% of $1,000 = $990)
-
-### Stage 2 Output (Coming Soon)
-Monthly panel with 50+ corporate bond signals ready for asset pricing research.
+| File | Purpose |
+|------|---------|
+| `.env` | WRDS credentials, author name, optional `START_DATE`/`END_DATE`, `N_CORES` |
+| `src/config.py` | Output format, TRACE dataset members, figure toggles |
+| `src/settings.py` | Reads `.env` via `python-decouple`, resolves directory paths |
+| `src/stage0/_trace_settings.py` | Stage 0 filter switches and parameters |
+| `src/stage1/_stage1_settings.py` | Stage 1 analytics configuration |
 
 ---
 
-## Performance
+## Citation & Credits
 
-**Expected Runtime (WRDS Cloud):**
+### Original Authors
 
-Using `./run_pipeline.sh` (complete automated pipeline from ROOT):
-- **Stage 0 - Data processing** (parallel): ~4-8 hours
-  - Enhanced TRACE: ~4 hours
-  - Standard TRACE: ~30-60 minutes
-  - 144A TRACE: ~30-60 minutes
-- **Stage 0 - Report generation**: ~30-60 minutes (waits for all three datasets)
-- **Stage 1 - Bond analytics**: ~2 hours (waits for Stage 0 reports)
-- **Total**: ~7 hours for complete pipeline (Stage 0 + Stage 1)
-
-**How it works:**
-The script uses SGE's `-hold_jid` feature to create automatic dependency chains:
-1. Stage 0: Three data extraction jobs run in parallel
-2. Stage 0: Report job waits until all three extraction jobs complete
-3. Stage 1: Analytics job waits until Stage 0 reports complete
-4. All jobs submitted with a single command from ROOT
-
-**Resource Usage:**
-- **Stage 0:**
-  - Memory: ~4-8GB per job (with default chunk_size=250)
-  - Disk: ~1-2GB per dataset (Parquet format)
-  - Parallel execution: All three datasets can run simultaneously
-- **Stage 1:**
-  - Memory: 24GB RAM required in WRDS (specified in run_stage1.sh as `#$ -l m_mem_free=24G`)
-  - Processing time: 2-6 hours depending on dataset size and parallel cores
-
----
-
-## Citation
-
-If you use this pipeline in your research, please cite:
+This pipeline is built on the work of **Alexander Dickerson**, **Cesare Robotti**, and **Giulio Rossetti**. If you use this pipeline in your research, please cite:
 
 ```bibtex
 @unpublished{dickerson2025pitfalls,
   author = {Dickerson, Alexander and Robotti, Cesare and Rossetti, Giulio},
-  title = {Common pitfalls in the evaluation of corporate bond strategies},
-  year = {2025},
-  note = {Working Paper}
+  title  = {Common pitfalls in the evaluation of corporate bond strategies},
+  year   = {2025},
+  note   = {Working Paper}
 }
 
 @unpublished{dickerson2025constructing,
   author = {Dickerson, Alexander and Rossetti, Giulio},
-  title = {Constructing TRACE Corporate Bond Datasets},
-  year = {2025},
-  note = {Working Paper}
+  title  = {Constructing TRACE Corporate Bond Datasets},
+  year   = {2025},
+  note   = {Working Paper}
 }
 ```
 
----
+### Links
 
-## References
+- **Original repository**: [Alexander-M-Dickerson/trace-data-pipeline](https://github.com/Alexander-M-Dickerson/trace-data-pipeline)
+- **Open Bond Asset Pricing**: [openbondassetpricing.com](https://openbondassetpricing.com/)
+- **PyBondLab** (companion for factor construction): [GiulioRossetti94/PyBondLab](https://github.com/GiulioRossetti94/PyBondLab)
 
-This pipeline builds on methods from:
+### This Fork
 
-- **Dick-Nielsen, J.** (2009). Liquidity biases in TRACE. *The Journal of Fixed Income*, 19(2), 43-55.
-- **Dick-Nielsen, J.** (2014). How to clean enhanced TRACE data. Working Paper.
-- **van Binsbergen, J. H., Nozawa, Y., & Schwert, M.** (2025). Duration-based valuation of corporate bonds. *The Review of Financial Studies*, 38(1), 158-191.
-
----
-
-## Contributing
-
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-**Areas where contributions would be valuable:**
-- Testing Stage 0 on different WRDS environments
-- Additional filter implementations
-- Performance optimizations
-- Extended documentation
-- Bug fixes and error reporting
-
----
-
-## Support
-
-- **Email**: alexander.dickerson1@unsw.edu.au
-- **Issues**: [GitHub Issues](https://github.com/Alexander-M-Dickerson/trace-data-pipeline/issues)
-- **Collaboration**: We welcome collaborators - please reach out!
+Restructured by **Jeremiah Bejarano**. The reorganization introduces PyDoit orchestration, hive-partitioned data storage, incremental processing, and a simplified execution workflow, while preserving the original cleaning methodology and analytics.
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-**Last Updated:** November 2025
-**Stage 0 Version:** 1.0.0 (Public Beta)
-**Stage 1 Version:** 1.0.0 (Public Beta)
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details. Original copyright (c) 2025 Alexander Dickerson.
