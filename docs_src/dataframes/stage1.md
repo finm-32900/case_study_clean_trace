@@ -249,10 +249,10 @@ All bonds in the dataset have a principal amount of $1,000.
 
 ## Related Documentation
 
-- [Stage 1 README](README_stage1.md) — Full Stage 1 documentation
-- [Stage 1 QUICKSTART](QUICKSTART_stage1.md) — Quick start guide
-- [Main README](../README.md) — Project overview
-- [Ultra-distressed Filter](README_distressed_filter.md) — Filter documentation
+- [Stage 1 Guide](../stage1.md) — Full Stage 1 documentation
+- [Stage 1 Quick Start](../stage1_quickstart.md) — Quick start guide
+- [Main README](../../README.md) — Project overview
+- [Ultra-distressed Filter](../distressed_filter.md) — Filter documentation
 
 ---
 

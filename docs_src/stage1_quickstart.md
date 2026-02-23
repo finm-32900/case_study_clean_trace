@@ -317,7 +317,7 @@ For **business day gaps** (excluding weekends and holidays), see `stage2/illiq_h
 - `acclast` = accrued interest (time-accrued component) → **DENOMINATOR**
 - `prfull = pr + acclast` = dirty price (standardization base)
 
-For detailed explanations of the accrued interest variables (`acclast`, `accpmt`, `accall`) and the return calculation methodology, see the **"Understanding Accrued Interest Variables"** section in [README_stage1.md](README_stage1.md).
+For detailed explanations of the accrued interest variables (`acclast`, `accpmt`, `accall`) and the return calculation methodology, see the **"Understanding Accrued Interest Variables"** section in [Stage 1 Guide](stage1.md).
 
 ---
 
@@ -517,7 +517,7 @@ scp -r <wrds_id>@wrds-cloud.wharton.upenn.edu:~/proj/stage1/data ./local_destina
 ## Support
 
 Having trouble? Check:
-1. **Detailed README:** See [README_stage1.md](README_stage1.md)
+1. **Detailed README:** See [Stage 1 Guide](stage1.md)
 2. **Log files:** Check `logs/stage1.err` for error messages
 3. **Email:** alexander.dickerson1@unsw.edu.au
 4. **GitHub Issues:** [trace-data-pipeline/issues](https://github.com/Alexander-M-Dickerson/trace-data-pipeline/issues)

@@ -635,7 +635,7 @@ After flagging a par block, the baseline may be shifted by the flagged rows. Coo
 
 ## See Also
 
-- `README_decimal_shift_corrector.md` — Documentation for the decimal shift corrector
-- `_trace_settings.py` — Default configuration parameters
-- `create_daily_enhanced_trace.py` — Full pipeline implementation
-- `FAQ.md` — Common questions about TRACE data cleaning
+- [Decimal Shift Corrector](decimal_shift_corrector.md) — Documentation for the decimal shift corrector
+- `src/stage0/_trace_settings.py` — Default configuration parameters
+- `src/stage0/clean_trace_local.py` — Full pipeline implementation
+- [FAQ](faq.md) — Common questions about TRACE data cleaning

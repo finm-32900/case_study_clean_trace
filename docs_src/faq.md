@@ -318,7 +318,7 @@ rm /scratch/{institution}/trace-data-pipeline.zip
 - `{institution}`: Your institution's scratch folder (e.g., `wharton`, `chicago`, `nyu`)
 - `{local_destination}`: Path on your local machine (e.g., `~/Downloads` or `C:\Users\YourName\Downloads`)
 
-For detailed instructions, see [QUICKSTART.md](QUICKSTART.md#download-results-to-your-local-machine).
+For detailed instructions, see [Quick Start Guide](quickstart.md#download-results-to-your-local-machine).
 
 ---
 
@@ -487,7 +487,7 @@ Yes! That's exactly what `./run_all_trace.sh` does. It submits Enhanced, Standar
 ## Contributing
 
 ### How can I contribute?
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines. Key ways to contribute:
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for detailed guidelines. Key ways to contribute:
 1. **Report bugs** using GitHub issues
 2. **Suggest features** via feature requests
 3. **Submit pull requests** for bug fixes or enhancements
@@ -523,7 +523,7 @@ Great! Create a feature request issue explaining:
 ## Academic Use
 
 ### How do I cite this pipeline?
-See the Citation section in [README.md](README.md). Use both references:
+See the Citation section in [README.md](../README.md). Use both references:
 
 **Primary**:
 ```
@@ -566,9 +566,9 @@ Yes! This is part of the [Open Bond Asset Pricing](https://openbondassetpricing.
 - **GitHub Issues**: [trace-data-pipeline/issues](https://github.com/Alexander-M-Dickerson/trace-data-pipeline/issues)
 - **Email**: alexander.dickerson1@unsw.edu.au
 - **Documentation**: 
-  - [Main README](README.md)
-  - [Stage 0 README](stage0/README_stage0.md)
-  - [Contributing Guide](CONTRIBUTING.md)
+  - [Main README](../README.md)
+  - [Stage 0 Guide](stage0.md)
+  - [Contributing Guide](../CONTRIBUTING.md)
 
 ### How quickly will I get a response?
 We aim to respond to issues within 1-3 business days. For urgent matters, email directly.
@@ -589,7 +589,7 @@ Yes! For collaboration or complex use cases, email alexander.dickerson1@unsw.edu
 - Ultra-distressed filters
 - Fama-French industry classifications
 
-See [stage1/QUICKSTART_stage1.md](stage1/QUICKSTART_stage1.md) to get started.
+See [Stage 1 Quick Start](stage1_quickstart.md) to get started.
 
 ### How do I run Stage 1?
 The easiest way is to use `./run_pipeline.sh` which automatically runs both Stage 0 and Stage 1.

@@ -446,6 +446,6 @@ The algorithm distinguishes errors from genuine moves by requiring:
 
 ## See Also
 
-- `README_bounce_back_filter.md` — Documentation for the bounce-back price error filter
-- `_trace_settings.py` — Default configuration parameters
-- `create_daily_enhanced_trace.py` — Full pipeline implementation
+- [Bounce-Back Filter](bounce_back_filter.md) — Documentation for the bounce-back price error filter
+- `src/stage0/_trace_settings.py` — Default configuration parameters
+- `src/stage0/clean_trace_local.py` — Full pipeline implementation

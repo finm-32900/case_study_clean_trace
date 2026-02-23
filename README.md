@@ -104,9 +104,9 @@ The companion repository is [PyBondLab](https://github.com/GiulioRossetti94/PyBo
 [![Website](https://img.shields.io/badge/Website-Visit-blue?logo=google-chrome&logoColor=white)](https://openbondassetpricing.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Stage 0](https://img.shields.io/badge/Stage%200-Public%20Beta-green)](stage0/)
-[![Stage 1](https://img.shields.io/badge/Stage%201-Public%20Beta-green)](stage1/)
-[![Stage 2](https://img.shields.io/badge/Stage%202-December%202025-orange)](stage2/)
+[![Stage 0](https://img.shields.io/badge/Stage%200-Public%20Beta-green)](docs_src/stage0.md)
+[![Stage 1](https://img.shields.io/badge/Stage%201-Public%20Beta-green)](docs_src/stage1.md)
+[![Stage 2](https://img.shields.io/badge/Stage%202-December%202025-orange)](docs_src/default_returns.md)
 
 [📄 Link to paper](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4575879)
 ---
@@ -125,7 +125,7 @@ Processes raw intraday TRACE transaction data to clean daily panels. Handles thr
 
 **Status:** Public beta - fully functional and ready for testing
 **Execution:** WRDS Cloud or your home machine (WRDS subscription required)
-**Documentation:** See [stage0/README_stage0.md](stage0/README_stage0.md) and [stage0/QUICKSTART_stage0.md](stage0/QUICKSTART_stage0.md)
+**Documentation:** See [Stage 0 Guide](docs_src/stage0.md) and [Stage 0 Quick Start](docs_src/stage0_quickstart.md)
 
 ### Stage 1: Daily Bond Analytics  **PUBLIC BETA**
 Enriches Stage 0 daily panels with comprehensive bond analytics and characteristics:
@@ -138,7 +138,7 @@ Enriches Stage 0 daily panels with comprehensive bond analytics and characterist
 
 **Status:** Public beta - fully functional and ready for testing
 **Execution:** WRDS Cloud or your home machine (WRDS subscription required)
-**Documentation:** See [stage1/README_stage1.md](stage1/README_stage1.md) and [stage1/QUICKSTART_stage1.md](stage1/QUICKSTART_stage1.md)
+**Documentation:** See [Stage 1 Guide](docs_src/stage1.md) and [Stage 1 Quick Start](docs_src/stage1_quickstart.md)
 
 ### Stage 2: Monthly Panel with Factor Signals  **IN DEVELOPMENT**
 Produces a clean, error-corrected monthly panel with dozens of corporate bond signals for asset pricing research:
@@ -172,7 +172,7 @@ Please reach out to `alexander.dickerson1@unsw.edu.au` if you would like to coll
 - **Decimal-shift corrector**: Automatically detects and fixes multiplicative price errors (10x, 0.1x, 100x, 0.01x)
 - **Bounce-back filter**: Identifies and removes erroneous price spikes that revert quickly
 - Algorithms designed by Dickerson, Robotti & Rossetti (2025) account for TRACE idiosyncrasies
-- **Full documentation**: See [README_decimal_shift_corrector.md](stage0/README_decimal_shift_corrector.md) and [README_bounce_back_filter.md](stage0/README_bounce_back_filter.md)
+- **Full documentation**: See [Decimal Shift Corrector](docs_src/decimal_shift_corrector.md) and [Bounce-Back Filter](docs_src/bounce_back_filter.md)
 
 
 ### Stage 0: Comprehensive Data Cleaning
@@ -203,7 +203,7 @@ Please reach out to `alexander.dickerson1@unsw.edu.au` if you would like to coll
 - **Ultra-distressed bond filters** to flag potentially erroneous prices
 - **Fama-French industry classifications** (17 and 30 industry groups)
 - Produces comprehensive daily bond-level dataset with 50+ variables
-- Ultra-distressed filter catches suspiciupus "rounded" price numbers at very low prices often associated with issues trading under default. See [README_distressed_filter.md](stage1/README_distressed_filter.md)
+- Ultra-distressed filter catches suspiciupus "rounded" price numbers at very low prices often associated with issues trading under default. See [Distressed Filter](docs_src/distressed_filter.md)
 
 ---
 
@@ -270,25 +270,25 @@ chmod +x run_pipeline.sh
 - ✅ Centralized settings (`config.py` for shared settings)
 
 **For detailed instructions:**
-- **Quick Start**: See [QUICKSTART.md](QUICKSTART.md) for complete walkthrough
-- **Stage 0**: See [stage0/README_stage0.md](stage0/README_stage0.md) or [stage0/QUICKSTART_stage0.md](stage0/QUICKSTART_stage0.md)
-- **Stage 1**: See [stage1/README_stage1.md](stage1/README_stage1.md) or [stage1/QUICKSTART_stage1.md](stage1/QUICKSTART_stage1.md)
+- **Quick Start**: See [Quick Start Guide](docs_src/quickstart.md) for complete walkthrough
+- **Stage 0**: See [Stage 0 Guide](docs_src/stage0.md) or [Stage 0 Quick Start](docs_src/stage0_quickstart.md)
+- **Stage 1**: See [Stage 1 Guide](docs_src/stage1.md) or [Stage 1 Quick Start](docs_src/stage1_quickstart.md)
 
 ---
 
 ## Documentation
 
 **Stage 0 - TRACE Data Processing:**
-- **[README](stage0/README_stage0.md)**: Complete guide for intraday to daily TRACE processing
-- **[QUICKSTART](stage0/QUICKSTART_stage0.md)**: Fast-track guide to get started quickly
-- **[Configuration Guide](stage0/README_stage0.md#configuration-choices-you-can-edit)**: All configurable parameters
-- **[Troubleshooting](stage0/README_stage0.md#troubleshooting)**: Common issues and solutions
+- **[Stage 0 Guide](docs_src/stage0.md)**: Complete guide for intraday to daily TRACE processing
+- **[Stage 0 Quick Start](docs_src/stage0_quickstart.md)**: Fast-track guide to get started quickly
+- **[Configuration Guide](docs_src/stage0.md#configuration-choices-you-can-edit)**: All configurable parameters
+- **[Troubleshooting](docs_src/stage0.md#troubleshooting)**: Common issues and solutions
 
 **Stage 1 - Bond Analytics:**
-- **[README](stage1/README_stage1.md)**: Complete guide for bond analytics and enrichment
-- **[QUICKSTART](stage1/QUICKSTART_stage1.md)**: Fast-track guide to get started quickly
-- **[Configuration Guide](stage1/README_stage1.md#configuration-choices-you-can-edit)**: All configurable parameters
-- **[Troubleshooting](stage1/README_stage1.md#troubleshooting)**: Common issues and solutions
+- **[Stage 1 Guide](docs_src/stage1.md)**: Complete guide for bond analytics and enrichment
+- **[Stage 1 Quick Start](docs_src/stage1_quickstart.md)**: Fast-track guide to get started quickly
+- **[Configuration Guide](docs_src/stage1.md#configuration-choices-you-can-edit)**: All configurable parameters
+- **[Troubleshooting](docs_src/stage1.md#troubleshooting)**: Common issues and solutions
 
 **Stage 2 - Monthly Panel:**
 - Coming soon
@@ -318,7 +318,7 @@ The pipeline generates a large folder (~6 GB) with hundreds of files. **Zip the 
    - **Mac**: Double-click the zip file
    - **Linux**: `unzip trace-data-pipeline.zip`
 
-**For detailed instructions** (including Windows GUI options): See [QUICKSTART.md](QUICKSTART.md#download-results-to-your-local-machine)
+**For detailed instructions** (including Windows GUI options): See [Quick Start Guide](docs_src/quickstart.md#download-results-to-your-local-machine)
 
 | Placeholder | Description | Example |
 |-------------|-------------|---------|
@@ -336,57 +336,44 @@ trace-data-pipeline/
 ├── README.md                         # This file
 ├── CONTRIBUTING.md                   # Contribution guidelines
 ├── CHANGELOG.md                      # Version history
-├── requirements.txt                  # Python dependencies (all stages)
-├── run_pipeline.sh                   # ✨ One-push button orchestrator (ROOT)
-├── .gitignore                        # Git ignore rules
+├── chartbook.toml                    # Pipeline & dataset registry
+├── dodo.py                           # PyDoit task orchestrator
+├── requirements.txt                  # Python dependencies
+├── .gitignore
 │
-├── stage0/                           # ✅ PUBLIC BETA - Intraday to daily processing
-│   ├── README_stage0.md              # Detailed documentation
-│   ├── QUICKSTART_stage0.md          # Fast-track guide
-│   ├── _trace_settings.py            # Configuration file
-│   ├── create_daily_enhanced_trace.py
-│   ├── create_daily_standard_trace.py
-│   ├── _run_enhanced_trace.py        # Runner scripts
-│   ├── _run_standard_trace.py
-│   ├── _run_144a_trace.py
-│   ├── _build_error_files.py         # Report generation
-│   ├── _error_plot_helpers.py        # Plotting utilities
-│   ├── run_enhanced_trace.sh         # Individual job scripts
-│   ├── run_standard_trace.sh
-│   ├── run_144a_trace.sh
-│   ├── run_build_data_reports.sh
-│   │
-│   ├── enhanced/                     # Enhanced TRACE output (auto-created)
-│   ├── standard/                     # Standard TRACE output (auto-created)
-│   ├── 144a/                         # Rule 144A output (auto-created)
-│   │
-│   └── data_reports/                 # Quality reports (auto-created)
-│       ├── enhanced/
-│       ├── standard/
-│       └── 144a/
+├── docs_src/                         # Documentation
+│   ├── quickstart.md                 # Quick start guide
+│   ├── faq.md                        # Frequently asked questions
+│   ├── stage0.md                     # Stage 0 guide
+│   ├── stage0_quickstart.md          # Stage 0 quick start
+│   ├── bounce_back_filter.md         # Bounce-back filter algorithm
+│   ├── decimal_shift_corrector.md    # Decimal shift correction algorithm
+│   ├── stage1.md                     # Stage 1 guide
+│   ├── stage1_quickstart.md          # Stage 1 quick start
+│   ├── distressed_filter.md          # Ultra-distressed filter algorithm
+│   ├── default_returns.md            # Default handling in returns
+│   ├── dataframes/                   # Data dictionaries
+│   │   ├── stage0_enhanced.md        # Enhanced TRACE data dictionary
+│   │   ├── stage0_standard.md        # Standard TRACE data dictionary
+│   │   ├── stage0_144a.md            # 144A TRACE data dictionary
+│   │   ├── stage1.md                 # Stage 1 data dictionary
+│   │   └── stage2.md                 # Stage 2 data dictionary
+│   └── charts/                       # Chart documentation (future)
 │
-├── stage1/                           # ✅ PUBLIC BETA - Daily bond analytics
-│   ├── README_stage1.md              # Detailed documentation
-│   ├── QUICKSTART_stage1.md          # Fast-track guide
-│   ├── _stage1_settings.py           # Configuration file
-│   ├── create_daily_stage1.py        # Main processing module
-│   ├── helper_functions.py           # Utility functions
-│   ├── _run_stage1.py                # Runner script
-│   ├── run_stage1.sh                 # Job submission script
-│   ├── requirements.txt              # Stage 1 specific dependencies
-│   │
-│   ├── data/                         # Stage 1 output (auto-created)
-│   │   ├── stage1_YYYYMMDD.parquet   # Enriched dataset
-│   │   ├── liu_wu_yields.xlsx        # Downloaded treasury yields
-│   │   ├── OSBAP_Linker_*.parquet    # Downloaded linker file
-│   │   ├── Siccodes17.txt            # FF17 industry file
-│   │   ├── Siccodes30.txt            # FF30 industry file
-│   │   └── reports/                  # Data quality reports
-│   │
-│   └── logs/                         # Execution logs (auto-created)
+├── src/                              # Source code
+│   ├── stage0/                       # Stage 0 processing
+│   └── stage1/                       # Stage 1 processing
 │
-└── stage2/                           # 🚧 COMING SOON - Monthly panel with signals
-    └── (In development)
+├── _data/                            # Data (auto-created, not versioned)
+│   ├── pulled/                       # Raw data from WRDS
+│   ├── stage0/                       # Stage 0 output (hive-partitioned)
+│   │   ├── enhanced/year=*/month=*/  # Enhanced TRACE
+│   │   ├── standard/year=*/month=*/  # Standard TRACE
+│   │   └── 144a/year=*/month=*/      # 144A TRACE
+│   └── stage1/                       # Stage 1 output
+│       └── stage1_YYYYMMDD.parquet   # Enriched dataset
+│
+└── _output/                          # Reports & notebooks (not versioned)
 ```
 
 ---

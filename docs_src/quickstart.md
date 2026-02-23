@@ -378,9 +378,9 @@ N_CORES = 1  # Use fewer cores on WRDS
 After the pipeline completes:
 
 1. **Explore your data**: Load `stage1_YYYYMMDD.parquet` into pandas/R
-2. **Read detailed docs**: See `README.md` for variable definitions
-3. **Check data quality**: Review reports in `stage1/data/reports/`
-4. **Customize filters**: Edit `stage1/_stage1_settings.py` for custom filters
+2. **Read detailed docs**: See [README.md](../README.md) for variable definitions
+3. **Check data quality**: Review reports in `_output/stage1_reports/`
+4. **Customize filters**: Edit `src/stage1/_stage1_settings.py` for custom filters
 5. **Run incrementally**: Re-run Stage 1 with different settings without re-running Stage 0
 
 ---
@@ -389,45 +389,36 @@ After the pipeline completes:
 
 ```
 trace-data-pipeline/
-├── config.py                        # Shared configuration (WRDS_USERNAME, OUTPUT_FORMAT)
-├── run_pipeline.sh                  # Main pipeline orchestrator
 ├── README.md                        # Detailed documentation
-├── QUICKSTART.md                    # This file
+├── chartbook.toml                   # Pipeline & dataset registry
+├── dodo.py                          # PyDoit task orchestrator
+├── requirements.txt                 # Python dependencies
 │
-├── stage0/                          # TRACE data extraction
-│   ├── run_enhanced_trace.sh        # SGE job script
-│   ├── run_standard_trace.sh
-│   ├── run_144a_trace.sh
-│   ├── run_build_data_reports.sh
-│   ├── create_daily_enhanced_trace.py
-│   ├── create_daily_standard_trace.py
-│   ├── _trace_settings.py           # Stage 0 configuration
-│   ├── logs/                        # Job logs
-│   ├── enhanced/                    # Enhanced TRACE outputs
-│   ├── standard/                    # Standard TRACE outputs
-│   └── 144a/                        # 144A TRACE outputs
+├── docs_src/                        # Documentation
+│   ├── quickstart.md                # This file
+│   ├── stage0.md                    # Stage 0 guide
+│   ├── stage1.md                    # Stage 1 guide
+│   └── dataframes/                  # Data dictionaries
 │
-└── stage1/                          # Bond analytics and enrichment
-    ├── run_stage1.sh                # SGE job script
-    ├── _run_stage1.py               # Main entry point
-    ├── stage1_pipeline.py           # Pipeline logic
-    ├── _stage1_settings.py          # Stage 1 configuration
-    ├── QUICKSTART_stage1.md         # Stage 1 specific guide
-    ├── logs/                        # Job logs
-    └── data/                        # Stage 1 outputs
-        ├── stage1_YYYYMMDD.parquet  # Final dataset
-        ├── liu_wu_yields.xlsx       # Treasury yields (auto-downloaded)
-        ├── OSBAP_Linker_*.parquet   # Equity linker (auto-downloaded)
-        ├── Siccodes17.txt           # FF17 industries (auto-downloaded)
-        └── Siccodes30.txt           # FF30 industries (auto-downloaded)
+├── src/                             # Source code
+│   ├── stage0/                      # Stage 0 processing
+│   └── stage1/                      # Stage 1 processing
+│
+├── _data/                           # Data (auto-created)
+│   ├── pulled/                      # Raw data from WRDS
+│   ├── stage0/                      # Stage 0 output
+│   └── stage1/                      # Stage 1 output
+│       └── stage1_YYYYMMDD.parquet  # Final dataset
+│
+└── _output/                         # Reports & notebooks
 ```
 
 ---
 
 ## Getting Help
 
-- 📖 **Detailed docs**: See `README.md` for comprehensive documentation
-- 🚀 **Stage-specific guide**: See `stage1/QUICKSTART_stage1.md` for Stage 1 details
+- 📖 **Detailed docs**: See [README.md](../README.md) for comprehensive documentation
+- 🚀 **Stage-specific guide**: See [Stage 1 Quick Start](stage1_quickstart.md) for Stage 1 details
 - 📧 **Email**: alexander.dickerson1@unsw.edu.au
 - 🐛 **Issues**: [GitHub Issues](https://github.com/Alexander-M-Dickerson/trace-data-pipeline/issues)
 

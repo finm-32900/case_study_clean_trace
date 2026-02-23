@@ -1034,7 +1034,6 @@ At function exit, individual flag columns are **dropped** to conserve RAM:
 
 ## See Also
 
-- `README_bounce_back_filter.md` — Documentation for the intraday bounce-back filter (Stage 0)
-- `_stage1_settings.py` — Default configuration parameters
-- `helper_functions.py:1003-1219` — Source code for `ultra_distressed_filter()`
-- `step_05_apply_ultra_distressed_filter.py` — Pipeline implementation
+- [Bounce-Back Filter](bounce_back_filter.md) — Documentation for the intraday bounce-back filter (Stage 0)
+- `src/stage1/_stage1_settings.py` — Default configuration parameters
+- `src/stage1/stage1_pipeline.py` — Pipeline implementation

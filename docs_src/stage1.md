@@ -10,7 +10,7 @@ This stage enriches the cleaned TRACE daily panels from Stage 0 with:
 
 The output is a comprehensive daily bond-level dataset ready for empirical research.
 
-If you want to get started quickly, see **[QUICKSTART_stage1.md](QUICKSTART_stage1.md)**.
+If you want to get started quickly, see **[Stage 1 Quick Start](stage1_quickstart.md)**.
 
 ---
 
