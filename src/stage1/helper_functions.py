@@ -4026,7 +4026,7 @@ corner cases the other filters did not catch.
 def build_latex_document(table1: str, table2: str, table3: str, table4: str,
                         table5: str = None, table6: str = None, table7: str = None,
                         table8: str = None,
-                        fig_filenames: list = None, author: str = None) -> str:
+                        fig_filenames: list = None) -> str:
     """
     Build complete LaTeX document with optional rating-specific tables and figures.
 
@@ -4051,8 +4051,6 @@ def build_latex_document(table1: str, table2: str, table3: str, table4: str,
     fig_filenames : list of tuples, optional
         List of (filename, caption) tuples for figures
         E.g., [('fig1.pdf', 'All Bonds'), ('fig2.pdf', 'Investment Grade')]
-    author : str, optional
-        Author name for the document
 
     Returns
     -------
@@ -4061,9 +4059,6 @@ def build_latex_document(table1: str, table2: str, table3: str, table4: str,
     """
     from datetime import datetime
     timestamp = datetime.now().strftime('%Y-%m-%d')
-    
-    # Build author line if provided
-    author_line = f"\\author{{{author}}}" if author else ""
     
     # Build rating-specific tables section if provided
     rating_tables_section = ""
@@ -4127,7 +4122,6 @@ def build_latex_document(table1: str, table2: str, table3: str, table4: str,
 \usepackage{hyperref}
 \geometry{margin=1in}
 \title{Stage 1 TRACE Daily Data Report}
-""" + author_line + r"""
 \date{""" + timestamp + r"""}
 \begin{document}
 \maketitle

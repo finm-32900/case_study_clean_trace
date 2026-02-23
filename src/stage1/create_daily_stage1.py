@@ -58,9 +58,6 @@ def run_stage1(config: dict):
     # Configure the module's global variables from our settings
     # This overwrites any defaults in stage1_pipeline.py
 
-    # Author
-    pipeline_module.AUTHOR = config["author"]
-
     # Paths
     pipeline_module.ROOT_PATH = config["root_path"]
     pipeline_module.STAGE0_DIR = config["stage0_dir"]

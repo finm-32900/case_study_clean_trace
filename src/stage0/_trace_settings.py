@@ -7,7 +7,7 @@ import sys
 
 # Import shared configuration from root-level config.py
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from config import WRDS_USERNAME, AUTHOR, OUTPUT_FORMAT
+from config import WRDS_USERNAME, OUTPUT_FORMAT
 
 # --- Date range and data paths (read from .env via decouple) ---------------
 import decouple

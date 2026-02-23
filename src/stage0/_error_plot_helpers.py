@@ -1071,7 +1071,6 @@ def build_data_report_tex(
     pages_made_ds: Optional[Iterable[Union[str, Path]]] = None,
     pages_made_bb: Optional[Iterable[Union[str, Path]]] = None,
     pages_made_ie: Optional[Iterable[Union[str, Path]]] = None,
-    author: str = None,
 ) -> Path:
     """
     Assemble and write data_report.tex in out_dir, including natbib + apalike bibliography.
@@ -1089,9 +1088,6 @@ def build_data_report_tex(
     _title_map = {"standard": "Standard", "enhanced": "Enhanced", "144a": "144A"}
     dtype_title = _title_map.get(str(data_type).lower().strip(), str(data_type))
 
-    # Build author line if provided
-    author_line = rf"\author{{{author}}}" if author else ""
-
     tex_lines = []
     tex_lines.append(r"\documentclass[11pt]{article}")
     tex_lines.append(r"\usepackage{graphicx,booktabs,geometry,ragged2e,setspace}")
@@ -1100,8 +1096,6 @@ def build_data_report_tex(
     tex_lines.append(r"\usepackage{hyperref}")
     tex_lines.append(r"\geometry{margin=1in}")
     tex_lines.append(rf"\title{{Stage 0 {dtype_title} TRACE Daily Data Report}}")
-    if author_line:
-        tex_lines.append(author_line)
     tex_lines.append(rf"\date{{{datetime.now().strftime('%Y-%m-%d')}}}")
     tex_lines.append(r"\begin{document}")
     tex_lines.append(r"\maketitle")

@@ -16,7 +16,7 @@ import sys
 
 # Import shared configuration from root-level config.py
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from config import WRDS_USERNAME, AUTHOR, OUTPUT_FORMAT, TRACE_MEMBERS
+from config import WRDS_USERNAME, OUTPUT_FORMAT, TRACE_MEMBERS
 import decouple
 
 # ============================================================================
@@ -247,7 +247,6 @@ def get_config() -> dict:
     config = {
         # User settings
         "wrds_username": WRDS_USERNAME,
-        "author": AUTHOR,
 
         # Paths
         "root_path": ROOT_PATH,

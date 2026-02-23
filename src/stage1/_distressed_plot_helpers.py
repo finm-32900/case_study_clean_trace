@@ -529,7 +529,6 @@ def build_distressed_report_tex(
     flagged_cusips: int,
     flag_breakdown: dict = None,
     pages_made: List[str] = None,
-    author: str = None,
 ) -> Path:
     """
     Assemble and write the Stage 1 Ultra Distressed Filter report LaTeX file.
@@ -544,14 +543,11 @@ def build_distressed_report_tex(
     flagged_cusips : int
     flag_breakdown : dict, optional
     pages_made : list of figure filenames
-    author : str, optional
 
     Returns
     -------
     Path to written .tex file
     """
-    author_line = rf"\author{{{author}}}" if author else ""
-
     tex_lines = []
     tex_lines.append(r"\documentclass[11pt]{article}")
     tex_lines.append(r"\usepackage{graphicx,booktabs,geometry,ragged2e,setspace}")
@@ -560,8 +556,6 @@ def build_distressed_report_tex(
     tex_lines.append(r"\usepackage{hyperref}")
     tex_lines.append(r"\geometry{margin=1in}")
     tex_lines.append(r"\title{Stage 1 Ultra Distressed Filters}")
-    if author_line:
-        tex_lines.append(author_line)
     tex_lines.append(rf"\date{{{datetime.now().strftime('%Y-%m-%d')}}}")
     tex_lines.append(r"\begin{document}")
     tex_lines.append(r"\maketitle")

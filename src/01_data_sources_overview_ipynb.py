@@ -26,9 +26,9 @@
 # 6. **FISD Ratings (S&P)** — S&P bond ratings history (WRDS)
 # 7. **FISD Redemption** — callable/redemption flags (WRDS)
 # 8. **Liu-Wu Treasury Yields** — zero-coupon yield curve (Google Sheets)
-# 9. **OSBAP Corporate Bond Returns** — monthly bond returns (OpenBondAssetPricing.com)
-# 10. **OSBAP Linker** — equity identifier linker (OpenBondAssetPricing.com)
-# 11. **OSBAP Treasury Bond Returns** — treasury returns (OpenBondAssetPricing.com)
+# 9. **OSBAP Corporate Bond Returns** — monthly bond returns; used for Stage 1 validation only (OpenBondAssetPricing.com)
+# 10. **OSBAP Linker (Fang, 2025)** — bond-firm link mapping CUSIPs to PERMNO/PERMCO/GVKEY; core Stage 1 input (OpenBondAssetPricing.com)
+# 11. **OSBAP Treasury Bond Returns** — treasury returns; currently documentation only (OpenBondAssetPricing.com)
 # 12. **TRACE 144A** — Rule 144A private placement trades (WRDS)
 # 13. **TRACE Enhanced** — trade-level transaction data (WRDS)
 # 14. **TRACE Standard** — trade-level transaction data (WRDS)
@@ -396,8 +396,9 @@ liu_wu.select(
 #
 # Monthly bond-level returns from the Open Source Bond Asset Pricing
 # (OSBAP) project at [openbondassetpricing.com](https://openbondassetpricing.com).
-# Used as an external benchmark to validate the pipeline's Stage 1 output
-# (duration, convexity, credit spreads).
+# **Used only for validation**: compared against Stage 1 output in
+# `test_stage1_vs_open_source.py` to benchmark duration, convexity,
+# credit spreads, and other metrics. Not consumed by any processing stage.
 #
 # **Key columns** (partial — see OSBAP documentation for full schema):
 #
@@ -437,12 +438,28 @@ if date_cols_corp:
 
 # %% [markdown]
 # ---
-# ## 10. OSBAP Linker — `pulled/osbap_linker.parquet`
+# ## 10. OSBAP Linker (Fang, 2025) — `pulled/osbap_linker.parquet`
 #
 # Source script: `pull_open_source_bond.py` | Source: openbondassetpricing.com
 #
-# Equity identifier linker from the OSBAP project. Maps bond CUSIPs to
-# equity identifiers (PERMNO, GVKEY, ticker) for cross-asset analysis.
+# **Core Stage 1 input.** Bond-firm link file constructed by Chuck Fang
+# (cite: Fang, 2025, "Monetary Policy Amplification through Bond Fund
+# Flows", working paper). Maps issuer CUSIPs to equity identifiers
+# (PERMNO, PERMCO, GVKEY) in real time.
+#
+# Many bonds are issued through subsidiaries that do not share the
+# parent's identifiers (e.g. Shell plc vs Shell International Finance BV),
+# and 19% of CUSIP6s change ultimate parents over time. Fang constructs
+# the link using the CUSIP-ticker mapping from ICE and TRACE, the
+# ticker-GVKEY mapping from Compustat Snapshot, and the CRSP-Compustat
+# Link from CRSP, with extensive hand corrections.
+#
+# Coverage: 93% (99%) of USD corporate debentures by amount outstanding
+# (trading volume), including 29,253 foreign/private issuers and 8,862
+# 144A bonds not covered by the WRDS Bond-CRSP Link.
+#
+# Used in Step 7 of `stage1_pipeline.py`: forward-filled and left-joined
+# on issuer CUSIP + year-month to attach equity IDs to every bond record.
 
 # %%
 linker = pl.scan_parquet(PULL_DIR / "osbap_linker.parquet")
@@ -463,8 +480,9 @@ linker.head(5).collect()
 #
 # Source script: `pull_open_source_bond.py`
 #
-# Treasury bond returns from the OSBAP project, used alongside corporate
-# bond returns for spread calculations and benchmarking.
+# Treasury bond returns from the OSBAP project. **Currently documentation
+# only** — not consumed by any processing or validation stage in the
+# pipeline.
 
 # %%
 treas = pl.scan_parquet(PULL_DIR / "treasury_bond_returns.parquet")

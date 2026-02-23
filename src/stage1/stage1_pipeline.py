@@ -47,7 +47,6 @@ tqdm.pandas()
 # To change configuration, edit _stage1_settings.py instead.
 #
 # The following variables must be set before this module executes:
-# - AUTHOR
 # - ROOT_PATH, STAGE0_DIR, STAGE1_DIR, STAGE1_DATA, LOG_DIR, REPORT_DIR, PULLED_DIR
 # - STAGE0_DATE_STAMP, TRACE_MEMBERS
 # - N_CORES, N_CHUNKS, DATE_CUT_OFF
@@ -1685,7 +1684,6 @@ def step8b_build_distressed_report(
         flagged_cusips=flagged_cusips,
         flag_breakdown=flag_breakdown,
         pages_made=pages_made,
-        author=AUTHOR if 'AUTHOR' in globals() else None,
     )
 
     logger.info("LaTeX report written to: %s", tex_path)
@@ -2763,7 +2761,7 @@ def step10_generate_reports():
     fig_list = fig_filenames if fig_filenames else None
     tex_content = hf.build_latex_document(
         table1_tex, table2_tex, table3_tex, table4_tex, table5_tex, table6_tex, table7_tex,
-        table8_tex, fig_filenames=fig_list, author=AUTHOR
+        table8_tex, fig_filenames=fig_list
     )
     
     # Write .tex file

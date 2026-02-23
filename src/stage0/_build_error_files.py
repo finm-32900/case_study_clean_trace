@@ -20,7 +20,7 @@ sys.path.insert(0, str(_THIS_DIR.parent))
 import _error_plot_helpers as HLP
 
 # Import shared configuration from config.py (now in src/)
-from config import TRACE_MEMBERS, STAGE0_OUTPUT_FIGURES, AUTHOR
+from config import TRACE_MEMBERS, STAGE0_OUTPUT_FIGURES
 
 # ---------------------------
 # Editable defaults
@@ -749,7 +749,6 @@ def main():
                 filters_table_dn=filters_table_dn,
                 filters_table_fi=filters_table_fi,
                 output_figures=STAGE0_OUTPUT_FIGURES,
-                author=AUTHOR,
             )
             if STAGE0_OUTPUT_FIGURES:
                 kwargs["pages_made_ds"] = pages_made_ds

@@ -23,12 +23,6 @@ import decouple
 WRDS_USERNAME = decouple.config("WRDS_USERNAME")
 
 # ============================================================================
-# AUTHOR INFORMATION -- Change accordingly please
-# ============================================================================
-# AUTHOR = "Open Source Bond Asset Pricing"
-AUTHOR = decouple.config("AUTHOR")
-
-# ============================================================================
 # SHARED OUTPUT SETTINGS
 # ============================================================================
 OUTPUT_FORMAT = "parquet"  # Options: "parquet" (recommended), "csv"
@@ -56,6 +50,6 @@ STAGE0_OUTPUT_FIGURES = True  # Set to False to skip error plots for faster proc
 #
 #   # In src/stage0/ or src/stage1/ files:
 #   sys.path.insert(0, str(Path(__file__).parent.parent))  # adds src/ to path
-#   from config import WRDS_USERNAME, AUTHOR, OUTPUT_FORMAT, TRACE_MEMBERS, STAGE0_OUTPUT_FIGURES
+#   from config import WRDS_USERNAME, OUTPUT_FORMAT, TRACE_MEMBERS, STAGE0_OUTPUT_FIGURES
 #
 # This ensures single source of truth for shared settings across all stages.
