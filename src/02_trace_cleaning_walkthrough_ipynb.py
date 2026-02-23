@@ -67,6 +67,46 @@ plt.rcParams.update({
 # the full trade lifecycle (original reports, corrections, cancellations,
 # reversals), and both price and volume.
 #
+# ### What securities does TRACE cover?
+#
+# While this project focuses on corporate bonds, TRACE covers several
+# categories of fixed-income securities:
+#
+# - **Corporate bonds** (investment-grade, high-yield, and convertible
+#   debt)---reported since TRACE launched in **July 2002**. This is the
+#   asset class we work with here.
+# - **Agency debentures**---reported since **March 2010**.
+# - **Mortgage-backed securities (MBS) and asset-backed securities (ABS)**,
+#   including TBA transactions---reported since **May 2011**; public
+#   dissemination was phased in through 2015.
+# - **U.S. Treasury securities**---reported since **July 2017**, but
+#   transaction-level public dissemination only began in March 2024,
+#   limited to on-the-run nominal coupons on an end-of-day basis. Full
+#   Treasury transaction data is not available to the public or
+#   researchers.
+# - **Rule 144A private placements**---reported separately; included in
+#   our pipeline via the TRACE 144A feed.
+#
+# ### What information is in the public data?
+#
+# The corporate bond transaction data that FINRA makes available to the
+# public and to academics includes trade-level details (price, yield,
+# volume, execution time, buy/sell indicator, counterparty type), but
+# **dealer identity is either removed or masked**. The TRACE Enhanced
+# data available on WRDS does not contain unmasked dealer identifiers.
+#
+# ### Data access
+#
+# - **WRDS** is the most common academic access point for corporate bond
+#   TRACE data (Enhanced, Standard, and 144A feeds). WRDS does not host
+#   agency, MBS/ABS, or Treasury TRACE data.
+# - **FINRA** also makes corporate bond TRACE data available directly to
+#   academic institutions and to the public (with delays). MBS/ABS
+#   historical data requires a separate agreement with FINRA. Free
+#   next-day transaction data and aggregate reports are available on
+#   [FINRA's website](https://www.finra.org/finra-data/fixed-income)
+#   for non-commercial use.
+#
 # Unlike equities, which trade on centralized exchanges with a consolidated
 # limit order book, corporate bonds trade OTC through dealer intermediaries.
 # This creates fundamental data-quality challenges:
@@ -131,7 +171,134 @@ plt.rcParams.update({
 
 # %% [markdown]
 # ---
-# ## 2. Raw TRACE Enhanced Data
+# ## 2. Data Sources and Pipeline Overview
+#
+# The pipeline consumes **14 datasets** from four providers: WRDS (TRACE
+# trade feeds and FISD bond reference tables), the Liu-Wu yield curve
+# (Google Sheets), the Kenneth French Data Library (Dartmouth), and the
+# Open Source Bond Asset Pricing project
+# ([openbondassetpricing.com](https://openbondassetpricing.com)). These
+# fall into three groups: **trade data** (the raw transactions we clean),
+# **bond reference data** (characteristics, ratings, and identifiers we
+# merge in), and **validation / linkage data** (external benchmarks and
+# cross-asset links).
+#
+# | # | Dataset | Source | Pipeline role | Stage |
+# |---|---------|--------|---------------|-------|
+# | 1 | TRACE Enhanced | WRDS | Primary trade data (Jul 2002--Sep 2024) | Pull $\to$ FISD filter $\to$ Stage 0 $\to$ Stage 1 |
+# | 2 | TRACE Standard | WRDS | Extends trade coverage (Oct 2024+) | Pull $\to$ FISD filter $\to$ Stage 0 $\to$ Stage 1 |
+# | 3 | TRACE 144A | WRDS | Private-placement trades (Rule 144A) | Pull $\to$ FISD filter $\to$ Stage 0 $\to$ Stage 1 |
+# | 4 | FISD Issue | WRDS | Bond-level reference (coupon, maturity, offering) | Pre-processing + Stage 1 |
+# | 5 | FISD Issuer | WRDS | Issuer attributes (SIC code, country) | Pre-processing |
+# | 6 | FISD Amount Outstanding | WRDS | Time-varying par amount outstanding | Stage 1 |
+# | 7 | FISD Ratings (S&P) | WRDS | Historical S&P credit ratings | Stage 1 |
+# | 8 | FISD Ratings (Moody's) | WRDS | Historical Moody's credit ratings | Stage 1 |
+# | 9 | FISD Redemption | WRDS | Callable-bond flag | Stage 1 |
+# | 10 | Liu-Wu Treasury Yields | Google Sheets | Zero-coupon yield curve for credit spreads | Stage 1 |
+# | 11 | Fama-French SIC Codes | Dartmouth | Industry classification (FF-17 / FF-30) | Stage 1 |
+# | 12 | OSBAP Linker (Fang, 2025) | OSBAP | Bond-to-equity identifier mapping | Stage 1 |
+# | 13 | OSBAP Corporate Bond Returns | OSBAP | Validation benchmark (duration, spreads) | Testing only |
+# | 14 | OSBAP Treasury Bond Returns | OSBAP | Not currently consumed | --- |
+
+# %% [markdown]
+# ### Three TRACE feeds
+#
+# FINRA publishes corporate bond trades through three separate reporting
+# channels. The pipeline pulls all three and merges them after cleaning:
+#
+# - **Enhanced** is the workhorse dataset. It has the longest history
+#   (July 2002 onward), the richest columns (exact volume in
+#   `entrd_vol_qt`, counterparty IDs in `cntra_mp_id`), and is the
+#   target of most academic TRACE-cleaning papers.
+# - **Standard** is the real-time public feed. WRDS makes it available
+#   from October 2024, so it extends coverage into months where Enhanced
+#   is not yet released. It uses a slightly different column schema
+#   (`ascii_rptd_vol_tx` for volume, `side` instead of `rpt_side_cd`).
+# - **144A** captures a separate market segment: bonds sold to qualified
+#   institutional buyers under SEC Rule 144A. These private placements
+#   do not appear in the Enhanced or Standard feeds.
+#
+# When the three are combined in Stage 1, **Enhanced takes priority**.
+# Standard is clipped to dates *after* the Enhanced maximum date to
+# avoid overlap, while 144A rows are kept unconditionally (they cover
+# distinct bonds). Duplicate (cusip, date) pairs across feeds are
+# resolved with preference Enhanced > Standard > 144A.
+
+# %% [markdown]
+# ### FISD reference data (6 files)
+#
+# The Mergent Fixed Income Securities Database (FISD), accessed via WRDS,
+# provides the bond-level reference data that the pipeline relies on
+# throughout:
+#
+# - **FISD Issue** --- One row per bond. Coupon, maturity, offering date,
+#   offering amount, bond type, currency, and other characteristics.
+#   Combined with FISD Issuer to build the **FISD universe** of standard
+#   US corporate bonds (10 screens: USD only, fixed-rate, non-convertible,
+#   non-ABS, etc.). Also used in Stage 1 to map `issue_id` to CUSIP for
+#   ratings and amount-outstanding merges.
+# - **FISD Issuer** --- One row per issuer. Provides the SIC code (used
+#   for Fama-French industry classification) and country of domicile.
+# - **FISD Amount Outstanding History** --- Time-varying par amount.
+#   Merged into the Stage 1 panel via `merge_asof` (backward on date) so
+#   each bond-day observation reflects the most recent outstanding amount.
+# - **FISD Ratings (S&P)** and **FISD Ratings (Moody's)** --- Historical
+#   credit ratings (one row per rating event). Converted to numeric
+#   scales in Stage 1 and merged via `merge_asof` so each bond-day gets
+#   the most recent rating. A composite rating is computed as the average
+#   of the S&P and Moody's numeric scores.
+# - **FISD Redemption** --- Callable/redeemable flags. Produces a binary
+#   `callable` indicator merged into Stage 1.
+
+# %% [markdown]
+# ### Liu-Wu Treasury yields
+#
+# The Liu-Wu zero-coupon Treasury yield curve (sourced from a Google
+# Sheets mirror of the original Liu-Wu dataset) provides daily yields
+# at 1, 2, 5, 7, 10, 20, and 30-year maturities. Stage 1 interpolates
+# this curve at each bond's remaining maturity and subtracts the
+# duration-matched Treasury yield from the bond's yield-to-maturity to
+# compute the **credit spread**.
+
+# %% [markdown]
+# ### Fama-French SIC codes
+#
+# The Kenneth French Data Library provides mappings from SIC code ranges
+# to the Fama-French 17-industry and 30-industry classification systems.
+# In Stage 1, each bond issuer's SIC code (from FISD Issuer) is matched
+# to these ranges, adding `ff17num` and `ff30num` industry identifiers
+# to every bond-day observation.
+
+# %% [markdown]
+# ### Open Source Bond Asset Pricing (OSBAP) datasets
+#
+# The OSBAP project at
+# [openbondassetpricing.com](https://openbondassetpricing.com) provides
+# three files that play different roles:
+#
+# - **OSBAP Linker (Fang, 2025)** --- A core Stage 1 input. Maps issuer
+#   CUSIPs (first 6 characters) to equity identifiers (PERMNO, PERMCO,
+#   GVKEY) over time. Many bonds are issued through subsidiaries that do
+#   not share the parent's identifiers, and 19% of CUSIP-6s change
+#   ultimate parents during the sample. The linker resolves this using
+#   CUSIP-ticker mappings from ICE and TRACE, the ticker-GVKEY mapping
+#   from Compustat, and the CRSP-Compustat link, with extensive hand
+#   corrections. Forward-filled and left-joined on (issuer CUSIP,
+#   year-month) in Stage 1 Step 7.
+# - **OSBAP Corporate Bond Returns** --- A **validation-only** benchmark.
+#   The test suite (`test_stage1_vs_open_source.py`) aggregates Stage 1
+#   daily output to month-end, inner-joins with OSBAP on (cusip, date),
+#   and checks that yield-to-maturity, modified duration, convexity,
+#   credit spread, time-to-maturity, bond market cap, bond age, and
+#   industry classifications are highly correlated and within acceptable
+#   tolerance. This is how we confirm the pipeline is producing
+#   correct results.
+# - **OSBAP Treasury Bond Returns** --- Pulled for completeness but not
+#   currently consumed by any processing or validation stage.
+
+# %% [markdown]
+# ---
+# ## 3. Raw TRACE Enhanced Data
 #
 # Each row in raw TRACE is a **single trade report**. Key columns:
 #
@@ -151,7 +318,7 @@ plt.rcParams.update({
 raw = pl.scan_parquet(
     PULL_DIR / "trace_enhanced" / "**/*.parquet",
     hive_partitioning=True,
-    allow_missing_columns=True,
+    missing_columns="insert",
 ).filter(pl.col("year") == 2024, pl.col("month") == 1)
 
 n_raw = raw.select(pl.len()).collect().item()
@@ -163,6 +330,10 @@ print(f"Raw TRACE Enhanced (Jan 2024) -- Rows: {n_raw:,}  |  Columns: {len(cols_
 
 # %%
 raw.head(10).collect()
+
+# %%
+raw.tail(10).collect().glimpse()
+
 
 # %% [markdown]
 # ### TRACE status code distribution
@@ -265,13 +436,36 @@ print("Top 5 CUSIPs by original-trade count (Jan 2024):")
 top_cusips
 
 # %%
-example_cusip = top_cusips["cusip_id"][0]
+# Find a cusip-date pair that has multiple status codes (T, C, X, etc.)
+# so the scatter plot illustrates the lifecycle records.
+_cusip_date_mix = (
+    raw.group_by("cusip_id", "trd_exctn_dt")
+    .agg(
+        pl.col("trc_st").n_unique().alias("n_status"),
+        pl.len().alias("n_records"),
+    )
+    .filter(pl.col("n_status") >= 3)
+    .sort("n_records", descending=True)
+    .head(1)
+    .collect()
+)
 
-# Pick a mid-month trading day
+# Fall back to the most-traded cusip on 2024-01-16 if no multi-status pair found
+if len(_cusip_date_mix) > 0:
+    example_cusip = _cusip_date_mix["cusip_id"][0]
+    example_date = _cusip_date_mix["trd_exctn_dt"][0]
+else:
+    example_cusip = top_cusips["cusip_id"][0]
+    example_date = None
+
 intraday = (
     raw.filter(
         (pl.col("cusip_id") == example_cusip)
-        & (pl.col("trd_exctn_dt") == pl.lit("2024-01-16").str.to_date())
+        & (
+            (pl.col("trd_exctn_dt") == example_date)
+            if example_date is not None
+            else (pl.col("trd_exctn_dt") == pl.lit("2024-01-16").str.to_date())
+        )
     )
     .sort("trd_exctn_tm")
     .collect()
@@ -324,12 +518,13 @@ colors_map = {"T": "steelblue", "X": "red", "C": "orange", "W": "purple", "Y": "
 fig, ax = plt.subplots(figsize=(10, 4))
 for status in sorted(set(statuses)):
     mask_s = np.array([s == status for s in statuses])
+    size = 200 if status in ("C", "R") else 25
     ax.scatter(
         times_hrs[mask_s],
         prices[mask_s],
         label=f"trc_st={status}",
         alpha=0.7,
-        s=25,
+        s=size,
         color=colors_map.get(status, "gray"),
     )
 ax.set_xlabel("Hour of day")
@@ -350,7 +545,7 @@ for st in sorted(set(statuses)):
 
 # %% [markdown]
 # ---
-# ## 3. FISD Universe Filtering
+# ## 4. FISD Universe Filtering
 #
 # Before cleaning trade data, we restrict to **standard US corporate bonds**
 # using the Mergent Fixed Income Securities Database (FISD). The universe is
@@ -409,7 +604,7 @@ print(f"\nFISD filter removes {pct:.1f}% of raw trade records.")
 
 # %% [markdown]
 # ---
-# ## 4. Stage 0: Dick-Nielsen Cleaning Pipeline
+# ## 5. Stage 0: Dick-Nielsen Cleaning Pipeline
 #
 # Stage 0 applies **11 sequential filters** to the FISD-filtered intraday data
 # and ends with daily aggregation. The implementation lives in
@@ -463,7 +658,7 @@ s0_jan.head(10).collect()
 raw_both = pl.scan_parquet(
     PULL_DIR / "trace_enhanced" / "**/*.parquet",
     hive_partitioning=True,
-    allow_missing_columns=True,
+    missing_columns="insert",
 ).select(pl.len()).collect().item()
 
 fisd_both = pl.scan_parquet(
@@ -501,9 +696,13 @@ raw_daily = (
     pl.scan_parquet(
         PULL_DIR / "trace_enhanced" / "**/*.parquet",
         hive_partitioning=True,
-        allow_missing_columns=True,
+        missing_columns="insert",
     )
-    .filter(pl.col("trc_st") == "T")
+    .filter(
+        pl.col("trc_st") == "T",
+        pl.col("year") == 2024,
+        pl.col("month").is_in([1, 2]),
+    )
     .group_by("trd_exctn_dt")
     .agg(pl.len().alias("n_trades"))
     .sort("trd_exctn_dt")
@@ -511,7 +710,8 @@ raw_daily = (
 )
 
 s0_daily = (
-    s0.group_by("trd_exctn_dt")
+    s0.filter(pl.col("year") == 2024, pl.col("month").is_in([1, 2]))
+    .group_by("trd_exctn_dt")
     .agg(pl.col("trade_count").sum().alias("n_trades"))
     .sort("trd_exctn_dt")
     .collect()
@@ -519,8 +719,11 @@ s0_daily = (
 
 fig, axes = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
 
+raw_dates = raw_daily["trd_exctn_dt"].to_pandas()
+s0_dates = s0_daily["trd_exctn_dt"].to_pandas()
+
 axes[0].bar(
-    raw_daily["trd_exctn_dt"].to_list(),
+    raw_dates,
     raw_daily["n_trades"].to_list(),
     color="steelblue",
     alpha=0.7,
@@ -530,7 +733,7 @@ axes[0].set_ylabel("Trade reports")
 axes[0].set_title("Raw TRACE (status=T records only)")
 
 axes[1].bar(
-    s0_daily["trd_exctn_dt"].to_list(),
+    s0_dates,
     s0_daily["n_trades"].to_list(),
     color="darkorange",
     alpha=0.7,
@@ -538,9 +741,10 @@ axes[1].bar(
 )
 axes[1].set_ylabel("Trades (after cleaning)")
 axes[1].set_title("Stage 0 (cleaned trade count)")
-axes[1].xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
-axes[1].xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
-plt.xticks(rotation=30)
+for _ax in axes:
+    _ax.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=mdates.MO))
+    _ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
+plt.setp(axes[1].get_xticklabels(), rotation=30, ha="right")
 
 fig.suptitle(
     "Daily trade volume: raw vs cleaned (Jan--Feb 2024)", fontsize=13, y=1.02
@@ -556,7 +760,7 @@ raw_pr = (
     pl.scan_parquet(
         PULL_DIR / "trace_enhanced" / "**/*.parquet",
         hive_partitioning=True,
-        allow_missing_columns=True,
+        missing_columns="insert",
     )
     .filter(
         (pl.col("trc_st") == "T")
@@ -661,7 +865,7 @@ print(f"95th pctile |EW - VW|:       ${np.nanpercentile(diff, 95):.4f}")
 
 # %% [markdown]
 # ---
-# ## 5. Stage 1: Enrichment
+# ## 6. Stage 1: Enrichment
 #
 # Stage 1 takes the clean daily panel from Stage 0 and enriches it with
 # bond analytics and reference data:
@@ -832,7 +1036,7 @@ plt.show()
 
 # %% [markdown]
 # ---
-# ## 6. Takeaways and Best Practices
+# ## 7. Takeaways and Best Practices
 #
 # 1. **Always clean TRACE data before computing returns.** Raw data contains
 #    cancellations, corrections, reversals, decimal-shift errors, and

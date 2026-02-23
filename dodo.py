@@ -301,26 +301,6 @@ def task_run_stage1():
     }
 
 
-def task_test_stage1_vs_open_source():
-    """Run pytest comparison of Stage 1 output vs open-source OSBAP data"""
-    return {
-        "actions": [
-            f"python -m pytest ./src/test_stage1_vs_open_source.py -v "
-            f"--tb=short --junitxml={OUTPUT_DIR / 'test_results.xml'}",
-        ],
-        "task_dep": ["run_stage1"],
-        "targets": [
-            OUTPUT_DIR / "test_results.xml",
-        ],
-        "file_dep": [
-            *SRC_PY_FILES,
-            DATA_DIR / "pulled" / "corporate_bond_returns.parquet",
-        ],
-        "clean": [],
-        "verbosity": 2,
-    }
-
-
 ##################################
 ## Notebook tasks
 ##################################
@@ -423,4 +403,25 @@ def task_build_chartbook_site():
             "run_notebooks",
         ],
         "clean": True,
+    }
+
+
+
+def task_test_stage1_vs_open_source():
+    """Run pytest comparison of Stage 1 output vs open-source OSBAP data"""
+    return {
+        "actions": [
+            f"python -m pytest ./src/test_stage1_vs_open_source.py -v "
+            f"--tb=short --junitxml={OUTPUT_DIR / 'test_results.xml'}",
+        ],
+        "task_dep": ["run_stage1"],
+        "targets": [
+            OUTPUT_DIR / "test_results.xml",
+        ],
+        "file_dep": [
+            *SRC_PY_FILES,
+            DATA_DIR / "pulled" / "corporate_bond_returns.parquet",
+        ],
+        "clean": [],
+        "verbosity": 2,
     }
