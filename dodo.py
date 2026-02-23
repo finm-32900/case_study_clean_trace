@@ -8,12 +8,13 @@ like a Makefile, but is Python-based.
 #######################################
 ## Make sure the src folder is in the path
 import sys
+from datetime import date as _date
 from os import environ
 from pathlib import Path
 
 sys.path.insert(1, "./src/")
 
-from settings import config
+from settings import config, get_start_date, get_end_date
 
 SRC_PY_FILES = sorted(Path("./src").rglob("*.py"))
 
@@ -25,6 +26,33 @@ OS_TYPE = config("OS_TYPE")
 
 ## Helpers for handling Jupyter Notebook tasks
 environ["PYDEVD_DISABLE_FILE_VALIDATION"] = "1"
+
+
+def _month_range(start, end):
+    """Return (year, month) tuples from start to end inclusive."""
+    if start is None or end is None:
+        return []
+    result = []
+    y, m = start.year, start.month
+    while (y, m) <= (end.year, end.month):
+        result.append((y, m))
+        m += 1
+        if m > 12:
+            y, m = y + 1, 1
+    return result
+
+
+def _hive_targets(base, name, months):
+    """Explicit parquet targets; falls back to directory if no date range."""
+    if not months:
+        return [base / name]
+    return [
+        base / name / f"year={y}" / f"month={m:02d}" / "data.parquet"
+        for y, m in months
+    ]
+
+
+_MONTHS = _month_range(get_start_date(), get_end_date())
 
 # fmt: off
 def jupyter_execute_notebook(notebook_path):
@@ -147,59 +175,24 @@ def task_pull():
         "verbosity": 2,
     }
 
-    yield {
-        "name": "trace_144a",
-        "doc": "Pull raw TRACE 144A from WRDS",
-        "actions": [
-            "ipython ./src/settings.py",
-            "ipython ./src/pull_trace_144a.py",
-        ],
-        "targets": [DATA_DIR / "pulled" / "trace_144a"],
-        "file_dep": [
-            "./src/settings.py",
-            "./src/wrds_utils.py",
-            "./src/pull_utils.py",
-            "./src/pull_trace_144a.py",
-        ],
-        "clean": [],
-        "verbosity": 2,
-    }
-
-    yield {
-        "name": "trace_enhanced",
-        "doc": "Pull raw TRACE Enhanced from WRDS",
-        "actions": [
-            "ipython ./src/settings.py",
-            "ipython ./src/pull_trace_enhanced.py",
-        ],
-        "targets": [DATA_DIR / "pulled" / "trace_enhanced"],
-        "file_dep": [
-            "./src/settings.py",
-            "./src/wrds_utils.py",
-            "./src/pull_utils.py",
-            "./src/pull_trace_enhanced.py",
-        ],
-        "clean": [],
-        "verbosity": 2,
-    }
-
-    yield {
-        "name": "trace_standard",
-        "doc": "Pull raw TRACE Standard from WRDS",
-        "actions": [
-            "ipython ./src/settings.py",
-            "ipython ./src/pull_trace_standard.py",
-        ],
-        "targets": [DATA_DIR / "pulled" / "trace_standard"],
-        "file_dep": [
-            "./src/settings.py",
-            "./src/wrds_utils.py",
-            "./src/pull_utils.py",
-            "./src/pull_trace_standard.py",
-        ],
-        "clean": [],
-        "verbosity": 2,
-    }
+    for trace_name in ["trace_144a", "trace_enhanced", "trace_standard"]:
+        yield {
+            "name": trace_name,
+            "doc": f"Pull raw {trace_name} from WRDS",
+            "actions": [
+                "ipython ./src/settings.py",
+                f"ipython ./src/pull_{trace_name}.py",
+            ],
+            "targets": _hive_targets(DATA_DIR / "pulled", trace_name, _MONTHS),
+            "file_dep": [
+                "./src/settings.py",
+                "./src/wrds_utils.py",
+                "./src/pull_utils.py",
+                f"./src/pull_{trace_name}.py",
+            ],
+            "clean": [],
+            "verbosity": 2,
+        }
 
 
 def task_build_fisd_universe():
@@ -235,7 +228,7 @@ def task_filter_trace_fisd():
                 "ipython ./src/settings.py",
                 f"ipython ./src/filter_trace_fisd.py -- --DATASET={dataset}",
             ],
-            "targets": [DATA_DIR / f"{dataset}_fisd"],
+            "targets": _hive_targets(DATA_DIR, f"{dataset}_fisd", _MONTHS),
             "task_dep": [f"pull:{dataset}"],
             "file_dep": [
                 "./src/settings.py",
@@ -268,7 +261,7 @@ def task_run_stage0():
                 DATA_DIR / "fisd_universe.parquet",
                 DATA_DIR / "fisd_universe_offamt.parquet",
             ],
-            "targets": [DATA_DIR / "stage0" / member],
+            "targets": _hive_targets(DATA_DIR / "stage0", member, _MONTHS),
             "clean": [],
             "verbosity": 2,
         }
@@ -300,7 +293,9 @@ def task_run_stage1():
             DATA_DIR / "pulled" / "ff17_sic_ranges.parquet",
             DATA_DIR / "pulled" / "ff30_sic_ranges.parquet",
         ],
-        "targets": [DATA_DIR / "stage1"],
+        "targets": [
+            DATA_DIR / "stage1" / f"stage1_{_date.today().strftime('%Y%m%d')}.parquet",
+        ],
         "clean": [],
         "verbosity": 2,
     }
