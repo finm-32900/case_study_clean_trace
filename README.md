@@ -37,16 +37,17 @@ cp .env.example .env
 Edit `.env` and fill in your WRDS credentials:
 
 ```
-WRDS_USERNAME="your_wrds_id"
-AUTHOR="Your Name"
+WRDS_USERNAME="your_wrds_username"
 ```
 
-To limit the pipeline to a specific date range (useful for testing or quicker runs), uncomment and set:
+**Important:** By default, the pipeline processes only a small 2-month sample (January--February 2024) so you can run end-to-end quickly without pulling 20+ years of data. To process the full TRACE history, uncomment and set explicit dates:
 
 ```
-START_DATE=2024-01-01
-END_DATE=2024-02-28
+START_DATE=2002-07-01
+END_DATE=2025-12-31
 ```
+
+If `START_DATE` is earlier than a dataset's earliest available date, it is automatically clamped (e.g. TRACE Enhanced starts 2002-07-01, Standard starts 2024-10-01).
 
 ### 3. Create a conda environment and install dependencies
 
@@ -131,7 +132,7 @@ case_study_clean_trace/
 
 | File | Purpose |
 |------|---------|
-| `.env` | WRDS credentials, author name, optional `START_DATE`/`END_DATE`, `N_CORES` |
+| `.env` | WRDS username, `START_DATE`/`END_DATE` (defaults to 2-month sample), `N_CORES` |
 | `src/config.py` | Output format, TRACE dataset members, figure toggles |
 | `src/settings.py` | Reads `.env` via `python-decouple`, resolves directory paths |
 | `src/stage0/_trace_settings.py` | Stage 0 filter switches and parameters |

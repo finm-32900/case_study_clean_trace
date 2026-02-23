@@ -9,17 +9,11 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import WRDS_USERNAME, OUTPUT_FORMAT
 
-# --- Date range and data paths (read from .env via decouple) ---------------
-import decouple
+# --- Date range (centralised in settings.py) --------------------------------
+from settings import get_start_date, get_end_date
 
-def _date_or_none(key):
-    val = decouple.config(key, default="")
-    if not val:
-        return None
-    return val  # kept as string for downstream use
-
-START_DATE = _date_or_none("START_DATE")
-END_DATE   = _date_or_none("END_DATE")
+START_DATE = get_start_date().isoformat()
+END_DATE   = get_end_date().isoformat()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "_data"

@@ -23,9 +23,9 @@ WRDS_USERNAME = config("WRDS_USERNAME")
 
 DATASET = "trace_standard"
 TABLE = "trace.trace"
-DEFAULT_START_DATE = date(2024, 10, 1)
-START_DATE = get_start_date() or DEFAULT_START_DATE
-END_DATE = get_end_date()  # None means "today" (handled by months_to_pull)
+EARLIEST_DATE = date(2024, 10, 1)  # earliest data available in this dataset
+START_DATE = max(get_start_date(), EARLIEST_DATE)
+END_DATE = get_end_date()
 
 COLUMNS = [
     "cusip_id",

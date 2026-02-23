@@ -126,9 +126,12 @@ defaults = {
 }
 
 
+_UNSET = object()
+
+
 def config(
     var_name,
-    default=None,
+    default=_UNSET,
     cast=None,
     settings_py_defaults=defaults,
     cli_vars=cli_vars,
@@ -170,17 +173,17 @@ def config(
         return default_value
 
     # 4. Use the default value provided in the local file. Error if not found
-    try:
-        return _config(var_name, default=default, cast=cast)
-    except Exception as e:
-        raise ValueError(
-            f"Configuration variable '{var_name}' is not defined. "
-            f"Please set it via:\n"
-            f"  1. Command line: --{var_name}=value\n"
-            f"  2. Environment variable: export {var_name}=value\n"
-            f"  3. .env file: {var_name}=value\n"
-            f"Original error: {e}"
-        ) from e
+    if default is not _UNSET:
+        if cast is not None and default is not None:
+            return cast(default)
+        return default
+    raise ValueError(
+        f"Configuration variable '{var_name}' is not defined. "
+        f"Please set it via:\n"
+        f"  1. Command line: --{var_name}=value\n"
+        f"  2. Environment variable: export {var_name}=value\n"
+        f"  3. .env file: {var_name}=value"
+    )
 
 
 ########################################################
@@ -209,36 +212,49 @@ FISD_PARAMS = {
 
 
 ########################################################
-## Optional debug date range
+## Default sample date range
 ########################################################
-# Set START_DATE and END_DATE to restrict the pipeline to a small window.
-# Useful for debugging/testing without pulling the full 20+ year history.
+# By default the pipeline processes a small 2-month window so that
+# first-time users can run end-to-end quickly without pulling 20+ years
+# of TRACE data from WRDS.
 #
-# Can be set via:
-#   - .env file:    START_DATE=2024-01-01  END_DATE=2024-02-28
+# To process the full history, set START_DATE and END_DATE in .env:
+#   START_DATE=2002-07-01
+#   END_DATE=2025-12-31
+#
+# Can also be set via CLI or environment variables:
 #   - CLI:          ipython script.py -- --START_DATE=2024-01-01 --END_DATE=2024-02-28
 #   - Environment:  export START_DATE=2024-01-01
 #
-# When not set, the pipeline uses each script's built-in default range.
+# Each pull script clamps START_DATE to the earliest available date
+# for that dataset (e.g. 2002-07-01 for Enhanced, 2024-10-01 for Standard).
+SAMPLE_START_DATE = "2024-01-01"
+SAMPLE_END_DATE = "2024-02-28"
 
 
 def get_start_date():
-    """Return START_DATE as a datetime.date, or None if not set."""
+    """Return START_DATE as a datetime.date.
+
+    Falls back to SAMPLE_START_DATE when not set in .env.
+    """
     from datetime import date as _date
 
     val = config("START_DATE", default=None)
     if val is None or val == "":
-        return None
+        return _date.fromisoformat(SAMPLE_START_DATE)
     return _date.fromisoformat(str(val))
 
 
 def get_end_date():
-    """Return END_DATE as a datetime.date, or None if not set."""
+    """Return END_DATE as a datetime.date.
+
+    Falls back to SAMPLE_END_DATE when not set in .env.
+    """
     from datetime import date as _date
 
     val = config("END_DATE", default=None)
     if val is None or val == "":
-        return None
+        return _date.fromisoformat(SAMPLE_END_DATE)
     return _date.fromisoformat(str(val))
 
 
