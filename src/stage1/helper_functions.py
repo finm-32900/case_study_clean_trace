@@ -5,7 +5,6 @@ import pandas as pd
 import numpy as np
 import QuantLib as ql
 from joblib import Parallel, delayed
-import wrds
 import zipfile
 import csv
 import gzip
@@ -656,121 +655,50 @@ def _check_internet_connectivity(host: str = "8.8.8.8", port: int = 53, timeout:
 
 
 def get_liu_wu_yields(
-    url: str = "https://docs.google.com/spreadsheets/d/11HsxLl_u2tBNt3FyN5iXGsIKLwxvVz7t/edit?usp=sharing",
+    url: str = None,
     start_date: str | pd.Timestamp = "2000-01-31",
-    local_file: str = "data/liu_wu_yields.xlsx"
+    local_file: str = None,
+    pulled_parquet: str = None,
 ) -> pd.DataFrame:
     """
-    Download Liu-Wu zero-coupon Treasury yields from Google Sheets.
-    If internet is not available (e.g., on WRDS compute nodes), falls back to local file.
+    Load pre-pulled Liu-Wu zero-coupon Treasury yields from parquet.
+
+    The data is expected to have been pulled by src/pull_liu_wu_yields.py
+    (via ``doit pull_liu_wu``) before Stage 1 runs.
 
     Returns columns matching FRED format:
       trd_exctn_dt, oneyr, twoyr, fiveyr, sevyr, tenyr, twentyr, thirtyr
 
-    Yields are converted to decimals (e.g., 0.045 for 4.5%).
+    Yields are in decimals (e.g., 0.045 for 4.5%).
 
     Args:
-        url: Google Sheets URL (sharing link)
-        start_date: Start date for filtering data
-        local_file: Path to local Excel file (used when internet unavailable)
+        url: Deprecated, ignored. Kept for backward compatibility.
+        start_date: Start date for filtering data.
+        local_file: Deprecated, ignored. Kept for backward compatibility.
+        pulled_parquet: Path to the pre-pulled parquet file. If None,
+            auto-detects from the project's _data/pulled/ directory.
 
     Returns:
         DataFrame with treasury yields at key maturities
     """
+    from pathlib import Path
 
-    # Check if internet is available
-    has_internet = _check_internet_connectivity()
+    if pulled_parquet is None:
+        # Auto-detect: look relative to the project root (two levels up from src/stage1/)
+        project_root = Path(__file__).resolve().parent.parent.parent
+        pulled_parquet = project_root / "_data" / "pulled" / "liu_wu_yields.parquet"
 
-    # Try to load data - either from internet or local file
-    if has_internet:
-        try:
-            logging.info("Internet available - downloading Liu-Wu yields from Google Sheets")
-            # Convert sharing URL to export URL
-            if "/edit?" in url or "/edit#" in url:
-                sheet_id = url.split("/d/")[1].split("/")[0]
-                export_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=xlsx&id={sheet_id}"
-            else:
-                export_url = url
+    pulled_path = Path(pulled_parquet)
 
-            # Download the Excel file
-            response = requests.get(export_url, timeout=30)
-            response.raise_for_status()
+    if not pulled_path.exists():
+        raise FileNotFoundError(
+            f"Pre-pulled Liu-Wu yields not found: {pulled_path}\n"
+            f"Please run 'doit pull_liu_wu' first to download the data."
+        )
 
-            # Load Excel from bytes (header row is at index 8, data starts at row 9)
-            df = pd.read_excel(BytesIO(response.content), header=8)
-            logging.info("Successfully downloaded Liu-Wu yields from Google Sheets")
-
-        except Exception as e:
-            logging.warning(f"Failed to download from internet: {e}")
-            logging.info(f"Falling back to local file: {local_file}")
-            has_internet = False  # Trigger local file fallback
-
-    if not has_internet:
-        # No internet - use local file
-        from pathlib import Path
-        local_path = Path(local_file)
-
-        if not local_path.exists():
-            raise FileNotFoundError(
-                f"No internet connection and local file not found: {local_file}\n"
-                f"Please download the file manually:\n"
-                f"  wget -O {local_file} \"https://docs.google.com/spreadsheets/d/11HsxLl_u2tBNt3FyN5iXGsIKLwxvVz7t/export?format=xlsx&id=11HsxLl_u2tBNt3FyN5iXGsIKLwxvVz7t\"\n"
-                f"Or run this from a machine with internet access."
-            )
-
-        logging.info(f"Internet not available - loading Liu-Wu yields from local file: {local_file}")
-        df = pd.read_excel(local_path, header=8)
-        logging.info(f"Successfully loaded Liu-Wu yields from {local_file}")
-
-    # Strip whitespace from all column names
-    df.columns = df.columns.str.strip()
-
-    # Map Liu-Wu maturities to FRED-style column names
-    # Liu-Wu uses "12 m", "24 m", etc. for months
-    # We extract: 12m (1yr), 24m (2yr), 60m (5yr), 84m (7yr), 120m (10yr), 240m (20yr), 360m (30yr)
-    maturity_map = {
-        '12 m': 'oneyr',
-        '24 m': 'twoyr',
-        '60 m': 'fiveyr',
-        '84 m': 'sevyr',
-        '120 m': 'tenyr',
-        '240 m': 'twentyr',
-        '360 m': 'thirtyr'
-    }
-
-    # First column contains dates in YYYYMMDD format
-    date_col = df.columns[0]
-
-    # Create result dataframe
-    result = pd.DataFrame()
-
-    # Convert date from YYYYMMDD integer to datetime
-    result['trd_exctn_dt'] = pd.to_datetime(df[date_col].astype(str), format='%Y%m%d', errors='coerce')
-
-    # Extract each maturity and convert from percentage to decimal
-    for mat_label, out_col in maturity_map.items():
-        if mat_label in df.columns:
-            # Liu-Wu data is in percentage points (e.g., 3.5 for 3.5%)
-            # Convert to decimal (e.g., 0.035)
-            result[out_col] = pd.to_numeric(df[mat_label], errors='coerce') / 100.0
-        else:
-            raise ValueError(f"Expected maturity '{mat_label}' not found in Liu-Wu data")
-
-    # Filter by start date
-    start = pd.to_datetime(start_date)
-    result = result[result['trd_exctn_dt'] >= start].copy()
-
-    # Resample and ffill()
-    result = result.set_index('trd_exctn_dt')
-    result = result.resample("D").last()
-    result = result.ffill()
-    result = result.reset_index()
-
-    # Remove rows with invalid dates
-    result = result.dropna(subset=['trd_exctn_dt'])
-
-    # Sort by date and forward fill missing values
-    result = result.sort_values('trd_exctn_dt').reset_index(drop=True)
+    logging.info("Loading pre-pulled Liu-Wu yields from %s", pulled_path)
+    result = pd.read_parquet(pulled_path)
+    logging.info("Loaded %d rows from Liu-Wu yields parquet", len(result))
 
     return result
 
@@ -4335,15 +4263,13 @@ def standardize_float_dtypes(df: pd.DataFrame, verbose: bool = False) -> pd.Data
     
     return df
 
-def add_ff_industries(fisd_df: pd.DataFrame, verbose: bool = True):
+def add_ff_industries(fisd_df: pd.DataFrame, verbose: bool = True, pulled_dir=None):
     """
     Add Fama-French 17 and 30 industry classifications to FISD data based on SIC codes.
 
-    Downloads and parses both FF17 and FF30 industry classification files, then matches
+    Loads pre-pulled FF17 and FF30 SIC range parquet files, then matches
     SIC codes to industries using fast vectorized operations. Returns only numeric codes
     (ff17num, ff30num) to save RAM; mappings returned separately for plotting.
-
-    If internet is not available (e.g., on WRDS compute nodes), falls back to local files.
 
     Parameters
     ----------
@@ -4351,6 +4277,9 @@ def add_ff_industries(fisd_df: pd.DataFrame, verbose: bool = True):
         FISD dataframe with 'sic_code' column
     verbose : bool
         Print progress information
+    pulled_dir : Path
+        Path to the pre-pulled data directory containing ff17_sic_ranges.parquet
+        and ff30_sic_ranges.parquet
 
     Returns
     -------
@@ -4367,117 +4296,41 @@ def add_ff_industries(fisd_df: pd.DataFrame, verbose: bool = True):
     - Uses pandas IntervalIndex for fast O(log n) lookups
     - Vectorized for performance with large datasets (100k+ rows)
     - Only numeric codes stored in dataframe to minimize RAM usage
-    - Automatically handles offline mode for WRDS compute nodes
     """
+    from pathlib import Path
+
+    if pulled_dir is None:
+        raise ValueError("pulled_dir must be provided (path to _data/pulled/)")
+    pulled_dir = Path(pulled_dir)
+
     if verbose:
         print("Adding Fama-French 17 and 30 industry classifications...")
 
     fisd_df = fisd_df.copy()
 
-    # Check internet connectivity once at the start
-    has_internet = _check_internet_connectivity()
-
     # ========================================================================
     # Process FF17
     # ========================================================================
-    ff17_url = "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/Siccodes17.zip"
-    ff17_local_file = "data/Siccodes17.txt"
     ff17_mapping = {}
 
     try:
-        # Try to get FF17 content - either from internet or local file
-        content = None
+        # Load pre-pulled FF17 SIC ranges
+        ind_df = pd.read_parquet(pulled_dir / "ff17_sic_ranges.parquet")
 
-        if has_internet:
-            try:
-                if verbose:
-                    print(f"  Internet available - downloading FF17 file...")
-                response = requests.get(ff17_url, timeout=30)
-                response.raise_for_status()
-
-                # Extract text file from zip
-                with zipfile.ZipFile(BytesIO(response.content)) as z:
-                    with z.open('Siccodes17.txt') as f:
-                        content = f.read().decode('utf-8', errors='ignore')
-
-                if verbose:
-                    print("  Successfully downloaded FF17 from internet")
-
-            except Exception as e:
-                if verbose:
-                    print(f"  Failed to download FF17 from internet: {e}")
-                    print(f"  Falling back to local file: {ff17_local_file}")
-                has_internet = False  # Trigger local file fallback
-
-        if not has_internet or content is None:
-            # No internet or download failed - use local file
-            from pathlib import Path
-            local_path = Path(ff17_local_file)
-
-            if not local_path.exists():
-                raise FileNotFoundError(
-                    f"No internet connection and local file not found: {ff17_local_file}\n"
-                    f"Please download the file manually:\n"
-                    f"  wget -O data/Siccodes17.zip \"{ff17_url}\"\n"
-                    f"  unzip data/Siccodes17.zip -d data/\n"
-                    f"Or run from the WRDS login node (which has internet access)."
-                )
-
-            if verbose:
-                print(f"  Internet not available - loading FF17 from local file: {ff17_local_file}")
-            with open(local_path, 'r', encoding='utf-8', errors='ignore') as f:
-                content = f.read()
-            if verbose:
-                print(f"  Successfully loaded FF17 from {ff17_local_file}")
-        
-        # Parse FF17 industry definitions
-        industries = []
-        current_ind_num = None
-        current_ind_name = None
-
-        for line in content.split('\n'):
-            line = line.strip()
-            if not line:
-                continue
-
-            parts = line.split()
-            if parts and parts[0].isdigit() and len(parts[0]) <= 2:
-                current_ind_num = int(parts[0])
-                if len(parts) >= 2:
-                    current_ind_name = parts[1]
-                continue
-
-            if current_ind_num is not None and '-' in line:
-                range_str = line.split()[0] if line.split() else ''
-                if '-' in range_str:
-                    try:
-                        start_str, end_str = range_str.split('-')
-                        start_sic = int(start_str)
-                        end_sic = int(end_str)
-                        industries.append({
-                            'ind_num': current_ind_num,
-                            'ind_name': current_ind_name,
-                            'sic_start': start_sic,
-                            'sic_end': end_sic
-                        })
-                    except (ValueError, IndexError):
-                        continue
-        
         if verbose:
-            print(f"  Parsed {len(industries)} SIC code ranges across 17 industries")
-        
+            print(f"  Loaded {len(ind_df)} SIC code ranges for FF17")
+
         # Build FF17 lookup
-        ind_df = pd.DataFrame(industries)
         ff17_mapping = ind_df.groupby('ind_num')['ind_name'].first().to_dict()
         ff17_mapping[17] = "Other"
-        
+
         intervals = pd.IntervalIndex.from_arrays(
-            ind_df['sic_start'], 
-            ind_df['sic_end'], 
+            ind_df['sic_start'],
+            ind_df['sic_end'],
             closed='both'
         )
         interval_to_ind_ff17 = dict(zip(intervals, ind_df['ind_num']))
-        
+
         def match_sic_to_ff17(sic_code):
             if pd.isna(sic_code):
                 return 17
@@ -4489,12 +4342,12 @@ def add_ff_industries(fisd_df: pd.DataFrame, verbose: bool = True):
                 return 17
             except (ValueError, TypeError):
                 return 17
-        
+
         if verbose:
             print(f"  Matching {len(fisd_df):,} SIC codes to FF17 industries...")
-        
+
         fisd_df['ff17num'] = fisd_df['sic_code'].apply(match_sic_to_ff17)
-        
+
         if verbose:
             ind_counts = fisd_df['ff17num'].value_counts().sort_index()
             print(f"  FF17 distribution:")
@@ -4502,118 +4355,40 @@ def add_ff_industries(fisd_df: pd.DataFrame, verbose: bool = True):
                 ind_name = ff17_mapping.get(ind_num, "Unknown")
                 pct = 100 * count / len(fisd_df)
                 print(f"    Industry {ind_num:2d} ({ind_name:12s}): {count:6,} bonds ({pct:5.2f}%)")
-        
+
         if verbose:
             print(" FF17 industries added successfully")
-        
+
     except Exception as e:
         if verbose:
             print(f" Error adding FF17 industries: {e}")
             print("  Defaulting all bonds to industry 17 (Other)")
         fisd_df['ff17num'] = 17
         ff17_mapping = {17: "Other"}
-    
+
     # ========================================================================
     # Process FF30
     # ========================================================================
-    ff30_url = "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/Siccodes30.zip"
-    ff30_local_file = "data/Siccodes30.txt"
     ff30_mapping = {}
 
     try:
-        # Try to get FF30 content - either from internet or local file
-        content = None
+        # Load pre-pulled FF30 SIC ranges
+        ind_df = pd.read_parquet(pulled_dir / "ff30_sic_ranges.parquet")
 
-        if has_internet:
-            try:
-                if verbose:
-                    print(f"  Internet available - downloading FF30 file...")
-                response = requests.get(ff30_url, timeout=30)
-                response.raise_for_status()
-
-                # Extract text file from zip
-                with zipfile.ZipFile(BytesIO(response.content)) as z:
-                    with z.open('Siccodes30.txt') as f:
-                        content = f.read().decode('utf-8', errors='ignore')
-
-                if verbose:
-                    print("  Successfully downloaded FF30 from internet")
-
-            except Exception as e:
-                if verbose:
-                    print(f"  Failed to download FF30 from internet: {e}")
-                    print(f"  Falling back to local file: {ff30_local_file}")
-                has_internet = False  # Trigger local file fallback
-
-        if not has_internet or content is None:
-            # No internet or download failed - use local file
-            from pathlib import Path
-            local_path = Path(ff30_local_file)
-
-            if not local_path.exists():
-                raise FileNotFoundError(
-                    f"No internet connection and local file not found: {ff30_local_file}\n"
-                    f"Please download the file manually:\n"
-                    f"  wget -O data/Siccodes30.zip \"{ff30_url}\"\n"
-                    f"  unzip data/Siccodes30.zip -d data/\n"
-                    f"Or run from the WRDS login node (which has internet access)."
-                )
-
-            if verbose:
-                print(f"  Internet not available - loading FF30 from local file: {ff30_local_file}")
-            with open(local_path, 'r', encoding='utf-8', errors='ignore') as f:
-                content = f.read()
-            if verbose:
-                print(f"  Successfully loaded FF30 from {ff30_local_file}")
-
-        # Parse FF30 industry definitions
-        industries = []
-        current_ind_num = None
-        current_ind_name = None
-
-        for line in content.split('\n'):
-            line = line.strip()
-            if not line:
-                continue
-
-            parts = line.split()
-            if parts and parts[0].isdigit() and len(parts[0]) <= 2:
-                current_ind_num = int(parts[0])
-                if len(parts) >= 2:
-                    current_ind_name = parts[1]
-                continue
-
-            if current_ind_num is not None and '-' in line:
-                range_str = line.split()[0] if line.split() else ''
-                if '-' in range_str:
-                    try:
-                        start_str, end_str = range_str.split('-')
-                        start_sic = int(start_str)
-                        end_sic = int(end_str)
-                        industries.append({
-                            'ind_num': current_ind_num,
-                            'ind_name': current_ind_name,
-                            'sic_start': start_sic,
-                            'sic_end': end_sic
-                        })
-                    except (ValueError, IndexError):
-                        continue
-        
         if verbose:
-            print(f"  Parsed {len(industries)} SIC code ranges across 30 industries")
-        
+            print(f"  Loaded {len(ind_df)} SIC code ranges for FF30")
+
         # Build FF30 lookup
-        ind_df = pd.DataFrame(industries)
         ff30_mapping = ind_df.groupby('ind_num')['ind_name'].first().to_dict()
         ff30_mapping[30] = "Other"
-        
+
         intervals = pd.IntervalIndex.from_arrays(
-            ind_df['sic_start'], 
-            ind_df['sic_end'], 
+            ind_df['sic_start'],
+            ind_df['sic_end'],
             closed='both'
         )
         interval_to_ind_ff30 = dict(zip(intervals, ind_df['ind_num']))
-        
+
         def match_sic_to_ff30(sic_code):
             if pd.isna(sic_code):
                 return 30
@@ -4625,12 +4400,12 @@ def add_ff_industries(fisd_df: pd.DataFrame, verbose: bool = True):
                 return 30
             except (ValueError, TypeError):
                 return 30
-        
+
         if verbose:
             print(f"  Matching {len(fisd_df):,} SIC codes to FF30 industries...")
-        
+
         fisd_df['ff30num'] = fisd_df['sic_code'].apply(match_sic_to_ff30)
-        
+
         if verbose:
             ind_counts = fisd_df['ff30num'].value_counts().sort_index()
             print(f"  FF30 distribution:")
@@ -4638,17 +4413,17 @@ def add_ff_industries(fisd_df: pd.DataFrame, verbose: bool = True):
                 ind_name = ff30_mapping.get(ind_num, "Unknown")
                 pct = 100 * count / len(fisd_df)
                 print(f"    Industry {ind_num:2d} ({ind_name:12s}): {count:6,} bonds ({pct:5.2f}%)")
-        
+
         if verbose:
             print(" FF30 industries added successfully")
-        
+
     except Exception as e:
         if verbose:
             print(f" Error adding FF30 industries: {e}")
             print("  Defaulting all bonds to industry 30 (Other)")
         fisd_df['ff30num'] = 30
         ff30_mapping = {30: "Other"}
-    
+
     return fisd_df, ff17_mapping, ff30_mapping
 
 

@@ -3,6 +3,10 @@
 Saves:
     _data/pulled/fisd_issue.parquet
     _data/pulled/fisd_issuer.parquet
+    _data/pulled/fisd_amt_out_hist.parquet
+    _data/pulled/fisd_ratings_sp.parquet
+    _data/pulled/fisd_ratings_moodys.parquet
+    _data/pulled/fisd_redemption.parquet
 """
 
 import logging
@@ -51,6 +55,28 @@ QRY_ISSUER = f"""
     FROM   fisd.fisd_mergedissuer
 """
 
+QRY_AMT_OUT_HIST = """
+    SELECT *
+    FROM   fisd.fisd_amt_out_hist
+"""
+
+QRY_RATINGS_SP = """
+    SELECT issue_id, rating_date, rating
+    FROM   fisd.fisd_ratings
+    WHERE  rating_type = 'SPR'
+"""
+
+QRY_RATINGS_MOODYS = """
+    SELECT issue_id, rating_date, rating
+    FROM   fisd.fisd_ratings
+    WHERE  rating_type = 'MR'
+"""
+
+QRY_REDEMPTION = """
+    SELECT issue_id, callable
+    FROM   fisd.fisd_mergedredemption
+"""
+
 
 def main():
     PULL_DIR.mkdir(parents=True, exist_ok=True)
@@ -64,6 +90,22 @@ def main():
         issuer_df = query_polars(db, QRY_ISSUER)
         logger.info("Pulled %d issuer rows", len(issuer_df))
 
+        logger.info("Pulling FISD amount outstanding history...")
+        amt_out_df = query_polars(db, QRY_AMT_OUT_HIST)
+        logger.info("Pulled %d amt_out_hist rows", len(amt_out_df))
+
+        logger.info("Pulling FISD S&P ratings...")
+        sp_df = query_polars(db, QRY_RATINGS_SP)
+        logger.info("Pulled %d S&P rating rows", len(sp_df))
+
+        logger.info("Pulling FISD Moody's ratings...")
+        mdy_df = query_polars(db, QRY_RATINGS_MOODYS)
+        logger.info("Pulled %d Moody's rating rows", len(mdy_df))
+
+        logger.info("Pulling FISD redemption (callable)...")
+        redemp_df = query_polars(db, QRY_REDEMPTION)
+        logger.info("Pulled %d redemption rows", len(redemp_df))
+
     issue_path = PULL_DIR / "fisd_issue.parquet"
     issuer_path = PULL_DIR / "fisd_issuer.parquet"
 
@@ -72,6 +114,22 @@ def main():
 
     logger.info("Wrote %s (%d rows)", issue_path, len(issue_df))
     logger.info("Wrote %s (%d rows)", issuer_path, len(issuer_df))
+
+    amt_out_path = PULL_DIR / "fisd_amt_out_hist.parquet"
+    amt_out_df.write_parquet(amt_out_path)
+    logger.info("Wrote %s (%d rows)", amt_out_path, len(amt_out_df))
+
+    sp_path = PULL_DIR / "fisd_ratings_sp.parquet"
+    sp_df.write_parquet(sp_path)
+    logger.info("Wrote %s (%d rows)", sp_path, len(sp_df))
+
+    mdy_path = PULL_DIR / "fisd_ratings_moodys.parquet"
+    mdy_df.write_parquet(mdy_path)
+    logger.info("Wrote %s (%d rows)", mdy_path, len(mdy_df))
+
+    redemp_path = PULL_DIR / "fisd_redemption.parquet"
+    redemp_df.write_parquet(redemp_path)
+    logger.info("Wrote %s (%d rows)", redemp_path, len(redemp_df))
 
 
 if __name__ == "__main__":

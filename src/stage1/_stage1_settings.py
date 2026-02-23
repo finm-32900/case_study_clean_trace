@@ -109,16 +109,8 @@ FINAL_FILTER_CONFIG = {
 # Yield data source: 'LIU_WU' (recommended) or 'FRED'
 YLD_TYPE = 'LIU_WU'
 
-# Liu-Wu zero-coupon yield curve URL
+# Liu-Wu zero-coupon yield curve URL (used by pull_liu_wu_yields.py, not at runtime)
 LIU_WU_URL = "https://docs.google.com/spreadsheets/d/11HsxLl_u2tBNt3FyN5iXGsIKLwxvVz7t/edit?usp=sharing"
-
-# ============================================================================
-# EXTERNAL DATA URLS
-# ============================================================================
-
-# OSBAP Linker file (for ISIN/FIGI/BBG identifiers)
-LINKER_URL = "https://openbondassetpricing.com/wp-content/uploads/2025/11/linker_file_2025.zip"
-LINKER_ZIPKEY = "OSBAP_Linker_October_2025.parquet"
 
 # ============================================================================
 # DERIVED PATHS (DO NOT EDIT)
@@ -138,6 +130,12 @@ STAGE0_DIR = ROOT_PATH / "stage0"
 STAGE1_DIR = ROOT_PATH / "stage1"
 STAGE1_DATA = STAGE1_DIR / "data"
 LOG_DIR = STAGE1_DIR / "logs"
+
+# Path to pre-pulled data directory (created by `doit pull_*` tasks)
+PULLED_DIR = ROOT_PATH / "_data" / "pulled"
+
+# Path to pre-pulled Liu-Wu yields parquet (created by `doit pull_liu_wu`)
+LIU_WU_PARQUET = PULLED_DIR / "liu_wu_yields.parquet"
 
 # ============================================================================
 # AUTO-DETECT STAGE0 DATE STAMP
@@ -270,13 +268,13 @@ def get_config() -> dict:
         "ultra_distressed_config": ULTRA_DISTRESSED_CONFIG,
         "final_filter_config": FINAL_FILTER_CONFIG,
 
+        # Pre-pulled data
+        "pulled_dir": PULLED_DIR,
+
         # Yield data
         "yld_type": YLD_TYPE,
         "liu_wu_url": LIU_WU_URL,
-
-        # External data
-        "linker_url": LINKER_URL,
-        "linker_zipkey": LINKER_ZIPKEY,
+        "liu_wu_parquet": LIU_WU_PARQUET,
 
         # Output settings
         "output_format": OUTPUT_FORMAT,
@@ -290,13 +288,6 @@ def validate_config(config: dict) -> None:
     """
     Validates configuration settings and raises errors if invalid.
     """
-    # Check WRDS username
-    if not config["wrds_username"]:
-        raise ValueError(
-            "WRDS_USERNAME not set. Please set the environment variable or "
-            "edit config.py (in project root) to include your WRDS username."
-        )
-
     # Check stage0 directory exists
     if not config["stage0_dir"].exists():
         raise FileNotFoundError(

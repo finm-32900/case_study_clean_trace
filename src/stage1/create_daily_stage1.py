@@ -58,8 +58,7 @@ def run_stage1(config: dict):
     # Configure the module's global variables from our settings
     # This overwrites any defaults in stage1_pipeline.py
 
-    # WRDS Configuration
-    pipeline_module.WRDS_USERNAME = config["wrds_username"]
+    # Author
     pipeline_module.AUTHOR = config["author"]
 
     # Paths
@@ -89,10 +88,10 @@ def run_stage1(config: dict):
     # Yield Data Configuration
     pipeline_module.yld_type = config["yld_type"]
     pipeline_module.liu_wu_url = config["liu_wu_url"]
+    pipeline_module.liu_wu_parquet = config.get("liu_wu_parquet")
 
-    # External Data URLs
-    pipeline_module.LINKER_URL = config["linker_url"]
-    pipeline_module.LINKER_ZIPKEY = config["linker_zipkey"]
+    # Pre-pulled data directory
+    pipeline_module.PULLED_DIR = config["pulled_dir"]
 
     # Create directories (in case they don't exist yet)
     for d in [config["stage1_dir"], config["stage1_data"], config["log_dir"]]:

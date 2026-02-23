@@ -13,7 +13,7 @@ This module contains all the core processing logic for Stage 1:
 - Generating comprehensive data quality reports
 
 IMPORTANT: This module is designed to be configured dynamically.
-All configuration variables (WRDS_USERNAME, ROOT_PATH, etc.) are set
+All configuration variables (ROOT_PATH, PULLED_DIR, etc.) are set
 by create_daily_stage1.py from _stage1_settings.py before execution.
 
 Do not edit configuration values directly in this file - they will be
@@ -31,7 +31,6 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 import polars as pl
-import wrds
 import gc
 from pandas.tseries.offsets import MonthEnd
 from tqdm import tqdm
@@ -48,12 +47,12 @@ tqdm.pandas()
 # To change configuration, edit _stage1_settings.py instead.
 #
 # The following variables must be set before this module executes:
-# - WRDS_USERNAME, AUTHOR
-# - ROOT_PATH, STAGE0_DIR, STAGE1_DIR, STAGE1_DATA, LOG_DIR
+# - AUTHOR
+# - ROOT_PATH, STAGE0_DIR, STAGE1_DIR, STAGE1_DATA, LOG_DIR, PULLED_DIR
 # - STAGE0_DATE_STAMP, TRACE_MEMBERS
 # - N_CORES, N_CHUNKS, DATE_CUT_OFF
 # - ULTRA_DISTRESSED_CONFIG, FINAL_FILTER_CONFIG
-# - yld_type, liu_wu_url, LINKER_URL, LINKER_ZIPKEY
+# - yld_type, liu_wu_url, liu_wu_parquet
 # ============================================================================
 
 # ============================================================================
@@ -127,7 +126,6 @@ traced_out     = None       # Columns for parallel processing (created in step4)
 sp_ratings     = None
 moodys_ratings = None
 call_dummy     = None
-db             = None
 
 # Filter tracking for Table 2 reporting
 FILTER_COUNTS  = {}
@@ -154,8 +152,8 @@ def step1_load_yields():
     logger.info("=" * 80)
     
     if yld_type == 'LIU_WU':
-        logger.info("Using Liu-Wu zero-coupon yields from Google Sheets")
-        ylds = hf.get_liu_wu_yields(url=liu_wu_url)
+        logger.info("Using Liu-Wu zero-coupon yields (pre-pulled parquet)")
+        ylds = hf.get_liu_wu_yields(pulled_parquet=getattr(sys.modules[__name__], 'liu_wu_parquet', None))
     elif yld_type == 'FRED':
         logger.info("Using FRED yields")
         ylds = hf.get_fred_yields()
@@ -315,7 +313,7 @@ def step3_load_fisd_data():
 
     # Add Fama-French 17 industry classification
     logger.info("Adding Fama-French 17 industry classifications...")
-    fisd, FF17_MAPPING, FF30_MAPPING = hf.add_ff_industries(fisd, verbose=False)
+    fisd, FF17_MAPPING, FF30_MAPPING = hf.add_ff_industries(fisd, verbose=False, pulled_dir=PULLED_DIR)
     logger.info("FF17 and FF30 industries added: ff17num and ff30num columns created")
     logger.info("Stored FF17_MAPPING with %d industries", len(FF17_MAPPING))
     logger.info("Stored FF30_MAPPING with %d industries", len(FF30_MAPPING))
@@ -655,27 +653,24 @@ def step5_compute_bond_analytics():
 def step6_merge_ratings():
     """Load and merge Amount Outstanding, then S&P and Moody's ratings."""
     mem_start = hf.log_memory_usage("step6_merge_ratings_start")
-    global final_df, sp_ratings, moodys_ratings, call_dummy, db
-    
+    global final_df, sp_ratings, moodys_ratings, call_dummy
+
     logger.info("=" * 80)
     logger.info("STEP 6: Amount Outstanding & Ratings")
     logger.info("=" * 80)
-    
-    if db is None:
-        logger.info("Connecting to WRDS...")
-        db = wrds.Connection(wrds_username=WRDS_USERNAME)
-        logger.info("WRDS connection established")
-    
+
+    # Load pre-pulled FISD data from disk (no internet required)
+    logger.info("Loading pre-pulled FISD data from %s ...", PULLED_DIR)
+
     # ========================================================================
     # PART 1: AMOUNT OUTSTANDING
     # ========================================================================
-    logger.info("=== Amount Outstanding: download & merge started ===")
-    
-    # Download historical amount-outstanding and issue tables
-    amt_out = db.get_table(library="fisd", table="fisd_amt_out_hist")
-    issues_for_amt = db.get_table(
-        library="fisd",
-        table="fisd_mergedissue",
+    logger.info("=== Amount Outstanding: load & merge started ===")
+
+    # Load pre-pulled amount-outstanding and issue tables
+    amt_out = pd.read_parquet(PULLED_DIR / "fisd_amt_out_hist.parquet")
+    issues_for_amt = pd.read_parquet(
+        PULLED_DIR / "fisd_issue.parquet",
         columns=["issue_id", "complete_cusip", "offering_amt", "offering_date"]
     )
     
@@ -783,39 +778,28 @@ def step6_merge_ratings():
     # ========================================================================
     # PART 2: RATINGS
     # ========================================================================
-    logger.info("=== Ratings: download & merge started ===")
+    logger.info("=== Ratings: load & merge started ===")
     
-    # --- Fetch ratings ---
-    logger.info("Downloading S&P ratings (SPR)...")
-    sp_ratings = db.raw_sql("""
-        SELECT issue_id, rating_date, rating
-        FROM   fisd.fisd_ratings
-        WHERE  rating_type = 'SPR'
-    """)
-    
-    logger.info("Downloading Moody's ratings (MR)...")
-    moodys_ratings = db.raw_sql("""
-        SELECT issue_id, rating_date, rating
-        FROM   fisd.fisd_ratings
-        WHERE  rating_type = 'MR'
-    """)
-    
-    logger.info("Downloading issue map ...")
-    issues = db.raw_sql("""
-        SELECT issue_id, complete_cusip
-        FROM   fisd.fisd_mergedissue
-    """)
+    # --- Load pre-pulled ratings ---
+    logger.info("Loading S&P ratings (SPR) from disk...")
+    sp_ratings = pd.read_parquet(PULLED_DIR / "fisd_ratings_sp.parquet")
+
+    logger.info("Loading Moody's ratings (MR) from disk...")
+    moodys_ratings = pd.read_parquet(PULLED_DIR / "fisd_ratings_moodys.parquet")
+
+    logger.info("Loading issue map from disk...")
+    issues = pd.read_parquet(
+        PULLED_DIR / "fisd_issue.parquet",
+        columns=["issue_id", "complete_cusip"]
+    )
     issues.rename(columns={"complete_cusip": "cusip_id"}, inplace=True)
-    
+
     logger.info("S&P rows: %d | Moody's rows: %d | Issue rows: %d",
                 len(sp_ratings), len(moodys_ratings), len(issues))
-    
-    # --- Fetch call dummy variable (WRDS) ---
-    logger.info("Downloading Bond Call Dummies...")
-    fisd_r = db.raw_sql("""
-        SELECT issue_id, callable
-        FROM   fisd.fisd_mergedredemption
-    """)
+
+    # --- Load pre-pulled call dummy variable ---
+    logger.info("Loading Bond Call Dummies from disk...")
+    fisd_r = pd.read_parquet(PULLED_DIR / "fisd_redemption.parquet")
     
     fisd_r.dropna(inplace=True)
     fisd_r['issue_id'] = fisd_r['issue_id'].astype(int)
@@ -1001,39 +985,10 @@ def step7_merge_linker():
     logger.info("STEP 7: Merging Equity Identifiers")
     logger.info("=" * 80)
 
-    # Check if internet is available
-    has_internet = hf._check_internet_connectivity()
-
-    # Try to load linker file - either from internet or local file
-    if has_internet:
-        try:
-            logger.info("Internet available - downloading OSBAP linker from URL")
-            logger.info("Loading linker file...")
-            dfl = hf.load_parquet_from_zip_url(LINKER_URL, LINKER_ZIPKEY).copy()
-            logger.info("Successfully downloaded and extracted OSBAP linker")
-        except Exception as e:
-            logger.warning(f"Failed to download from internet: {e}")
-            logger.info("Falling back to local file")
-            has_internet = False  # Trigger local file fallback
-
-    if not has_internet:
-        # No internet - use local file
-        from pathlib import Path
-        local_file = f"data/{LINKER_ZIPKEY}"
-        local_path = Path(local_file)
-
-        if not local_path.exists():
-            raise FileNotFoundError(
-                f"No internet connection and local file not found: {local_file}\n"
-                f"Please download the file manually:\n"
-                f"  wget -O data/linker_file_2025.zip \"{LINKER_URL}\"\n"
-                f"  unzip data/linker_file_2025.zip -d data/\n"
-                f"Or run this from a machine with internet access."
-            )
-
-        logger.info(f"Internet not available - loading OSBAP linker from local file: {local_file}")
-        dfl = pd.read_parquet(local_path).copy()
-        logger.info(f"Successfully loaded OSBAP linker from {local_file}")
+    # Load pre-pulled OSBAP linker from disk (no internet required)
+    logger.info("Loading OSBAP linker from pre-pulled parquet...")
+    dfl = pd.read_parquet(PULLED_DIR / "osbap_linker.parquet").copy()
+    logger.info("Loaded OSBAP linker: %d rows", len(dfl))
 
     dfl.columns = dfl.columns.str.lower()
 
@@ -2971,13 +2926,8 @@ def save_outputs():
 # ============================================================================
 
 def cleanup():
-    """Close database connection."""
-    global db
-    
-    if db is not None:
-        db.close()
-        logger.info("WRDS connection closed")
-        print("\n[CLEANUP] WRDS connection closed")
+    """Final cleanup (no-op now that WRDS connection is handled by pull scripts)."""
+    logger.info("Cleanup complete")
 
 
 # ============================================================================

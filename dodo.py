@@ -73,6 +73,10 @@ def task_pull_fisd():
         "targets": [
             DATA_DIR / "pulled" / "fisd_issue.parquet",
             DATA_DIR / "pulled" / "fisd_issuer.parquet",
+            DATA_DIR / "pulled" / "fisd_amt_out_hist.parquet",
+            DATA_DIR / "pulled" / "fisd_ratings_sp.parquet",
+            DATA_DIR / "pulled" / "fisd_ratings_moodys.parquet",
+            DATA_DIR / "pulled" / "fisd_redemption.parquet",
         ],
         "file_dep": [
             "./src/settings.py",
@@ -139,6 +143,45 @@ def task_pull_trace():
             "./src/wrds_utils.py",
             "./src/pull_utils.py",
             "./src/pull_trace_144a.py",
+        ],
+        "clean": [],
+        "verbosity": 2,
+    }
+
+
+def task_pull_liu_wu():
+    """Pull Liu-Wu zero-coupon Treasury yields from Google Sheets"""
+    return {
+        "actions": [
+            "ipython ./src/settings.py",
+            "ipython ./src/pull_liu_wu_yields.py",
+        ],
+        "targets": [
+            DATA_DIR / "pulled" / "liu_wu_yields.parquet",
+        ],
+        "file_dep": [
+            "./src/settings.py",
+            "./src/pull_liu_wu_yields.py",
+        ],
+        "clean": [],
+        "verbosity": 2,
+    }
+
+
+def task_pull_fama_french():
+    """Pull Fama-French SIC code classification files from Dartmouth"""
+    return {
+        "actions": [
+            "ipython ./src/settings.py",
+            "ipython ./src/pull_fama_french_sic.py",
+        ],
+        "targets": [
+            DATA_DIR / "pulled" / "ff17_sic_ranges.parquet",
+            DATA_DIR / "pulled" / "ff30_sic_ranges.parquet",
+        ],
+        "file_dep": [
+            "./src/settings.py",
+            "./src/pull_fama_french_sic.py",
         ],
         "clean": [],
         "verbosity": 2,
@@ -228,6 +271,16 @@ def task_run_stage1():
             "./src/stage1/stage1_pipeline.py",
             "./src/stage1/helper_functions.py",
             "./src/config.py",
+            # Pre-pulled data consumed by Stage 1
+            DATA_DIR / "pulled" / "liu_wu_yields.parquet",
+            DATA_DIR / "pulled" / "fisd_issue.parquet",
+            DATA_DIR / "pulled" / "fisd_amt_out_hist.parquet",
+            DATA_DIR / "pulled" / "fisd_ratings_sp.parquet",
+            DATA_DIR / "pulled" / "fisd_ratings_moodys.parquet",
+            DATA_DIR / "pulled" / "fisd_redemption.parquet",
+            DATA_DIR / "pulled" / "osbap_linker.parquet",
+            DATA_DIR / "pulled" / "ff17_sic_ranges.parquet",
+            DATA_DIR / "pulled" / "ff30_sic_ranges.parquet",
         ],
         "targets": ["./stage1/data/"],
         "clean": [],
@@ -245,6 +298,7 @@ def task_pull_open_source_bond():
         "targets": [
             DATA_DIR / "pulled" / "corporate_bond_returns.parquet",
             DATA_DIR / "pulled" / "treasury_bond_returns.parquet",
+            DATA_DIR / "pulled" / "osbap_linker.parquet",
         ],
         "file_dep": [
             "./src/settings.py",

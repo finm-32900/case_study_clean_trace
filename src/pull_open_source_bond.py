@@ -1,13 +1,15 @@
 """Pull open-source bond data from OpenBondAssetPricing.com.
 
-Downloads the OSBAP main panel (monthly bond-level data) and treasury
-bond returns for comparison with our Stage 1 daily output.
+Downloads the OSBAP main panel (monthly bond-level data), treasury
+bond returns for comparison with our Stage 1 daily output, and the
+OSBAP linker file for equity identifier merges.
 
 Saves:
     _data/pulled/corporate_bond_returns.parquet
     _data/pulled/corporate_bond_returns_README.txt
     _data/pulled/treasury_bond_returns.parquet
     _data/pulled/treasury_bond_returns_README.pdf
+    _data/pulled/osbap_linker.parquet
 """
 
 import os
@@ -40,6 +42,12 @@ DATA_INFO = {
         "parquet": "corporate_bond_returns.parquet",
         "readme_contents": "README.txt",
         "readme_file": "corporate_bond_returns_README.txt",
+    },
+    "OSBAP Linker": {
+        "url": "https://openbondassetpricing.com/wp-content/uploads/2025/11/linker_file_2025.zip",
+        "source_format": "zip_parquet",
+        "zip_contents": "OSBAP_Linker_October_2025.parquet",
+        "parquet": "osbap_linker.parquet",
     },
 }
 
