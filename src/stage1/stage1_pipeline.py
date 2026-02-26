@@ -26,6 +26,7 @@ Updated: 2025-11-17
 
 import sys
 import glob
+import shutil
 from pathlib import Path
 from datetime import datetime
 import pandas as pd
@@ -2828,6 +2829,11 @@ def save_outputs():
     out_file = STAGE1_DATA / f"stage1_{timestamp}.parquet"
     final_df.to_parquet(out_file, index=False)
     logger.info("[OK] Main output saved: %s", out_file)
+
+    # Stable-name copy so doit can track a fixed target for idempotency
+    latest_file = STAGE1_DATA / "stage1_latest.parquet"
+    shutil.copy2(out_file, latest_file)
+    logger.info("[OK] Stable copy saved: %s", latest_file)
 
     # Ratings outputs - check if already exported in variable_drop()
     if sp_ratings is not None:

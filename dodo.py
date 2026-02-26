@@ -16,8 +16,6 @@ sys.path.insert(1, "./src/")
 
 from settings import config, get_start_date, get_end_date
 
-SRC_PY_FILES = sorted(Path("./src").rglob("*.py"))
-
 DOIT_CONFIG = {"backend": "sqlite3", "dep_file": "./.doit-db.sqlite"}
 
 DATA_DIR = config("DATA_DIR")
@@ -63,6 +61,13 @@ def _months_with_input(input_dir, months, min_bytes=5000):
 
 
 _MONTHS = _month_range(get_start_date(), get_end_date())
+
+# Earliest available date per TRACE dataset (mirrors EARLIEST_DATE in each pull script)
+_TRACE_EARLIEST = {
+    "trace_144a": _date(2002, 7, 1),
+    "trace_enhanced": _date(2002, 7, 1),
+    "trace_standard": _date(2024, 10, 1),
+}
 
 # fmt: off
 def jupyter_execute_notebook(notebook_path):
@@ -186,6 +191,8 @@ def task_pull():
     }
 
     for trace_name in ["trace_144a", "trace_enhanced", "trace_standard"]:
+        effective_start = max(get_start_date(), _TRACE_EARLIEST[trace_name])
+        trace_months = _month_range(effective_start, get_end_date())
         yield {
             "name": trace_name,
             "doc": f"Pull raw {trace_name} from WRDS",
@@ -193,7 +200,7 @@ def task_pull():
                 "ipython ./src/settings.py",
                 f"ipython ./src/pull_{trace_name}.py",
             ],
-            "targets": _hive_targets(DATA_DIR / "pulled", trace_name, _MONTHS),
+            "targets": _hive_targets(DATA_DIR / "pulled", trace_name, trace_months),
             "file_dep": [
                 "./src/settings.py",
                 "./src/wrds_utils.py",
@@ -231,6 +238,7 @@ def task_filter_trace_fisd():
     """Filter raw TRACE data to FISD universe CUSIPs"""
 
     for dataset in ["trace_enhanced", "trace_standard", "trace_144a"]:
+        pulled_months = _months_with_input(DATA_DIR / "pulled" / dataset, _MONTHS)
         yield {
             "name": dataset,
             "doc": f"Filter {dataset} to FISD universe CUSIPs",
@@ -238,12 +246,14 @@ def task_filter_trace_fisd():
                 "ipython ./src/settings.py",
                 f"ipython ./src/filter_trace_fisd.py -- --DATASET={dataset}",
             ],
-            "targets": _hive_targets(DATA_DIR, f"{dataset}_fisd", _MONTHS),
+            "targets": _hive_targets(DATA_DIR, f"{dataset}_fisd", pulled_months),
             "file_dep": [
                 "./src/settings.py",
                 "./src/clean_utils.py",
                 "./src/filter_trace_fisd.py",
                 DATA_DIR / "fisd_universe.parquet",
+                # Raw pulled TRACE partitions this task reads
+                *_hive_targets(DATA_DIR / "pulled", dataset, pulled_months),
             ],
             "clean": [],
             "verbosity": 2,
@@ -255,8 +265,13 @@ def task_run_stage0():
 
     members = ["enhanced", "standard", "144a"]
     for member in members:
-        real_months = _months_with_input(
+        input_months = _months_with_input(
             DATA_DIR / f"trace_{member}_fisd", _MONTHS
+        )
+        # Targets use output directory: cleaning may produce fewer months
+        # than input (e.g. borderline-empty partitions get filtered out).
+        output_months = _months_with_input(
+            DATA_DIR / "stage0" / member, _MONTHS, min_bytes=0
         )
         yield {
             "name": member,
@@ -272,8 +287,10 @@ def task_run_stage0():
                 "./src/config.py",
                 DATA_DIR / "fisd_universe.parquet",
                 DATA_DIR / "fisd_universe_offamt.parquet",
+                # Filtered TRACE partitions this task reads
+                *_hive_targets(DATA_DIR, f"trace_{member}_fisd", input_months),
             ],
-            "targets": _hive_targets(DATA_DIR / "stage0", member, real_months),
+            "targets": _hive_targets(DATA_DIR / "stage0", member, output_months),
             "clean": [],
             "verbosity": 2,
         }
@@ -304,9 +321,16 @@ def task_run_stage1():
             DATA_DIR / "pulled" / "osbap_linker.parquet",
             DATA_DIR / "pulled" / "ff17_sic_ranges.parquet",
             DATA_DIR / "pulled" / "ff30_sic_ranges.parquet",
+            # Stage 0 outputs consumed by Stage 1
+            *_hive_targets(DATA_DIR / "stage0", "enhanced",
+                           _months_with_input(DATA_DIR / "stage0" / "enhanced", _MONTHS)),
+            *_hive_targets(DATA_DIR / "stage0", "standard",
+                           _months_with_input(DATA_DIR / "stage0" / "standard", _MONTHS)),
+            *_hive_targets(DATA_DIR / "stage0", "144a",
+                           _months_with_input(DATA_DIR / "stage0" / "144a", _MONTHS)),
         ],
         "targets": [
-            DATA_DIR / "stage1" / f"stage1_{_date.today().strftime('%Y%m%d')}.parquet",
+            DATA_DIR / "stage1" / "stage1_latest.parquet",
         ],
         "clean": [],
         "verbosity": 2,
@@ -420,7 +444,9 @@ def task_test_stage1_vs_open_source():
             OUTPUT_DIR / "test_results.xml",
         ],
         "file_dep": [
-            *SRC_PY_FILES,
+            "./src/test_stage1_vs_open_source.py",
+            "./src/settings.py",
+            DATA_DIR / "stage1" / "stage1_latest.parquet",
             DATA_DIR / "pulled" / "corporate_bond_returns.parquet",
         ],
         "clean": [],
