@@ -200,7 +200,16 @@ def step2_load_trace_data():
             )
 
         logger.info("Loading %s from %d hive-partitioned files...", member, len(parquet_files))
-        df_pl = pl.scan_parquet(pattern).collect()
+
+        try:
+            df_pl = pl.scan_parquet(pattern, missing_columns="insert").collect()
+        except pl.exceptions.SchemaError:
+            # Some partitions have Int/Float mismatches (e.g. ask_count is
+            # Int64 in files without nulls, Float64 in files with nulls).
+            # Fall back to per-file read with relaxed concat.
+            logger.info("  Schema mismatch detected, reading with relaxed concat...")
+            parts = [pl.read_parquet(f) for f in parquet_files]
+            df_pl = pl.concat(parts, how="diagonal_relaxed")
         df_i = df_pl.to_pandas()
         if 'trd_exctn_dt' in df_i.columns:
             df_i['trd_exctn_dt'] = pd.to_datetime(df_i['trd_exctn_dt'])

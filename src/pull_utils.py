@@ -104,7 +104,10 @@ def enforce_schema(
         if col not in df.columns or df.schema[col] == target:
             continue
         src = df.schema[col]
-        if target == pl.Date and src == pl.String:
+        # All-null columns can be cast directly; string parsing would fail.
+        if df[col].is_null().all():
+            casts.append(pl.col(col).cast(target, strict=False))
+        elif target == pl.Date and src == pl.String:
             casts.append(pl.col(col).str.to_date(strict=False))
         elif target == pl.Time and src == pl.String:
             casts.append(pl.col(col).str.to_time(strict=False))

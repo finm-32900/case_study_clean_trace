@@ -667,10 +667,20 @@ def clean_enhanced_trace(
     # --- Month-by-month processing ---
     month_count = 0
     total_rows = 0
+    skipped_existing = 0
     start_t = time.time()
 
     for year, month, trace_pl in _iter_partitions(base_dir, start_date, end_date):
         month_count += 1
+
+        # Skip months whose output already exists
+        out_path = out_sub / f"year={year}" / f"month={month:02d}" / "data.parquet"
+        if out_path.exists():
+            logger.info("  Skipping %d-%02d (output already exists)", year, month)
+            skipped_existing += 1
+            del trace_pl
+            continue
+
         logger.info(
             "-" * 50 + "\nProcessing %d-%02d (%d rows)",
             year,
@@ -754,14 +764,17 @@ def clean_enhanced_trace(
 
     elapsed = round(time.time() - start_t, 1)
     logger.info(
-        "Enhanced cleaning took %.1f seconds (%d months, %d total rows)",
+        "Enhanced cleaning took %.1f seconds (%d months, %d new rows, %d skipped-existing)",
         elapsed,
         month_count,
         total_rows,
+        skipped_existing,
     )
 
-    if total_rows == 0:
+    if total_rows == 0 and skipped_existing == 0:
         raise RuntimeError("Enhanced cleaning produced no output rows.")
+    if total_rows == 0 and skipped_existing > 0:
+        logger.info("No new rows written (all %d months already existed).", skipped_existing)
 
     # --- Write FISD universe for stage1 ---
     fisd_universe = pd.read_parquet(fisd_universe_path)
@@ -844,10 +857,20 @@ def clean_standard_trace(
     # --- Month-by-month processing ---
     month_count = 0
     total_rows = 0
+    skipped_existing = 0
     start_t = time.time()
 
     for year, month, trace_pl in _iter_partitions(base_dir, start_date, end_date):
         month_count += 1
+
+        # Skip months whose output already exists
+        out_path = out_sub / f"year={year}" / f"month={month:02d}" / "data.parquet"
+        if out_path.exists():
+            logger.info("  Skipping %d-%02d (output already exists)", year, month)
+            skipped_existing += 1
+            del trace_pl
+            continue
+
         logger.info(
             "-" * 50 + "\nProcessing %d-%02d (%d rows)",
             year,
@@ -928,12 +951,15 @@ def clean_standard_trace(
 
     elapsed = round(time.time() - start_t, 1)
     logger.info(
-        "%s cleaning took %.1f seconds (%d months, %d total rows)",
+        "%s cleaning took %.1f seconds (%d months, %d new rows, %d skipped-existing)",
         label,
         elapsed,
         month_count,
         total_rows,
+        skipped_existing,
     )
 
-    if total_rows == 0:
+    if total_rows == 0 and skipped_existing == 0:
         raise RuntimeError(f"{label} cleaning produced no output rows.")
+    if total_rows == 0 and skipped_existing > 0:
+        logger.info("No new rows written (all %d months already existed).", skipped_existing)

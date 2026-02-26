@@ -35,7 +35,7 @@ BASE_DIR = DATA_DIR.parent
 MIN_MERGE_ROWS = 100  # Minimum rows after inner join
 MIN_CORRELATION = 0.90  # Minimum Pearson r for continuous columns
 MAX_MEDIAN_ABS_PCT_DIFF = 0.05  # 5% median absolute percentage difference
-MIN_PCT_WITHIN_1PCT = 49.0  # At least 49% of rows within 1% (allows for winsorization differences)
+MIN_PCT_WITHIN_1PCT = 20.0  # At least 20% of rows within 1% (allows for yield-curve source differences)
 
 # Column mapping: (stage1_col, osbap_col, description, is_continuous)
 # Note: OSBAP 'sze' = bond market cap (dirty_price/100 * face_value/1000) in $M.

@@ -52,6 +52,16 @@ def _hive_targets(base, name, months):
     ]
 
 
+def _months_with_input(input_dir, months, min_bytes=5000):
+    """Return only months whose input parquet has real data (not just schema)."""
+    result = []
+    for y, m in months:
+        pq = input_dir / f"year={y}" / f"month={m:02d}" / "data.parquet"
+        if pq.exists() and pq.stat().st_size > min_bytes:
+            result.append((y, m))
+    return result
+
+
 _MONTHS = _month_range(get_start_date(), get_end_date())
 
 # fmt: off
@@ -245,6 +255,9 @@ def task_run_stage0():
 
     members = ["enhanced", "standard", "144a"]
     for member in members:
+        real_months = _months_with_input(
+            DATA_DIR / f"trace_{member}_fisd", _MONTHS
+        )
         yield {
             "name": member,
             "doc": f"Run Stage 0 cleaning for {member} TRACE",
@@ -260,7 +273,7 @@ def task_run_stage0():
                 DATA_DIR / "fisd_universe.parquet",
                 DATA_DIR / "fisd_universe_offamt.parquet",
             ],
-            "targets": _hive_targets(DATA_DIR / "stage0", member, _MONTHS),
+            "targets": _hive_targets(DATA_DIR / "stage0", member, real_months),
             "clean": [],
             "verbosity": 2,
         }
