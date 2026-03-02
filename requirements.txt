@@ -46,5 +46,13 @@ polars>=1.9.0
 # IPython (for running scripts via dodo.py)
 ipython
 
+# Notebook conversion (for dodo.py notebook tasks)
+jupytext
+nbconvert
+jupyter
+
+# Chartbook (for building Sphinx docs site)
+"chartbook[all]"
+
 # Testing
 pytest
