@@ -226,8 +226,6 @@ def task_build_fisd_universe():
         "file_dep": [
             "./src/settings.py",
             "./src/build_fisd_universe.py",
-            DATA_DIR / "pulled" / "fisd_issue.parquet",
-            DATA_DIR / "pulled" / "fisd_issuer.parquet",
         ],
         "clean": [],
         "verbosity": 2,
@@ -251,9 +249,6 @@ def task_filter_trace_fisd():
                 "./src/settings.py",
                 "./src/clean_utils.py",
                 "./src/filter_trace_fisd.py",
-                DATA_DIR / "fisd_universe.parquet",
-                # Raw pulled TRACE partitions this task reads
-                *_hive_targets(DATA_DIR / "pulled", dataset, pulled_months),
             ],
             "clean": [],
             "verbosity": 2,
@@ -279,16 +274,12 @@ def task_run_stage0():
             "actions": [
                 f"python ./src/stage0/_run_{member}_trace.py",
             ],
-            "task_dep": [f"filter_trace_fisd:trace_{member}"],
+            # "task_dep": [f"filter_trace_fisd:trace_{member}"],
             "file_dep": [
                 f"./src/stage0/_run_{member}_trace.py",
                 "./src/stage0/_trace_settings.py",
                 "./src/stage0/clean_trace_local.py",
                 "./src/config.py",
-                DATA_DIR / "fisd_universe.parquet",
-                DATA_DIR / "fisd_universe_offamt.parquet",
-                # Filtered TRACE partitions this task reads
-                *_hive_targets(DATA_DIR, f"trace_{member}_fisd", input_months),
             ],
             "targets": _hive_targets(DATA_DIR / "stage0", member, output_months),
             "clean": [],
@@ -303,7 +294,7 @@ def task_run_stage1():
             "mkdir -p _data/stage1 _data/logs/stage1 _output/stage1_reports",
             "python ./src/stage1/_run_stage1.py",
         ],
-        "task_dep": ["run_stage0"],
+        # "task_dep": ["run_stage0"],
         "file_dep": [
             "./src/stage1/_run_stage1.py",
             "./src/stage1/_stage1_settings.py",
@@ -311,23 +302,6 @@ def task_run_stage1():
             "./src/stage1/stage1_pipeline.py",
             "./src/stage1/helper_functions.py",
             "./src/config.py",
-            # Pre-pulled data consumed by Stage 1
-            DATA_DIR / "pulled" / "liu_wu_yields.parquet",
-            DATA_DIR / "pulled" / "fisd_issue.parquet",
-            DATA_DIR / "pulled" / "fisd_amt_out_hist.parquet",
-            DATA_DIR / "pulled" / "fisd_ratings_sp.parquet",
-            DATA_DIR / "pulled" / "fisd_ratings_moodys.parquet",
-            DATA_DIR / "pulled" / "fisd_redemption.parquet",
-            DATA_DIR / "pulled" / "osbap_linker.parquet",
-            DATA_DIR / "pulled" / "ff17_sic_ranges.parquet",
-            DATA_DIR / "pulled" / "ff30_sic_ranges.parquet",
-            # Stage 0 outputs consumed by Stage 1
-            *_hive_targets(DATA_DIR / "stage0", "enhanced",
-                           _months_with_input(DATA_DIR / "stage0" / "enhanced", _MONTHS)),
-            *_hive_targets(DATA_DIR / "stage0", "standard",
-                           _months_with_input(DATA_DIR / "stage0" / "standard", _MONTHS)),
-            *_hive_targets(DATA_DIR / "stage0", "144a",
-                           _months_with_input(DATA_DIR / "stage0" / "144a", _MONTHS)),
         ],
         "targets": [
             DATA_DIR / "stage1" / "stage1_latest.parquet",
@@ -345,25 +319,25 @@ notebook_tasks = {
     "01_data_sources_overview_ipynb": {
         "path": "./src/01_data_sources_overview_ipynb.py",
         "file_dep": [
-            DATA_DIR / "pulled" / "corporate_bond_returns.parquet",
-            DATA_DIR / "pulled" / "ff17_sic_ranges.parquet",
-            DATA_DIR / "pulled" / "ff30_sic_ranges.parquet",
-            DATA_DIR / "pulled" / "fisd_amt_out_hist.parquet",
-            DATA_DIR / "pulled" / "fisd_issue.parquet",
-            DATA_DIR / "pulled" / "fisd_issuer.parquet",
-            DATA_DIR / "pulled" / "fisd_ratings_moodys.parquet",
-            DATA_DIR / "pulled" / "fisd_ratings_sp.parquet",
-            DATA_DIR / "pulled" / "fisd_redemption.parquet",
-            DATA_DIR / "pulled" / "liu_wu_yields.parquet",
-            DATA_DIR / "pulled" / "osbap_linker.parquet",
-            DATA_DIR / "pulled" / "treasury_bond_returns.parquet",
+            # DATA_DIR / "pulled" / "corporate_bond_returns.parquet",
+            # DATA_DIR / "pulled" / "ff17_sic_ranges.parquet",
+            # DATA_DIR / "pulled" / "ff30_sic_ranges.parquet",
+            # DATA_DIR / "pulled" / "fisd_amt_out_hist.parquet",
+            # DATA_DIR / "pulled" / "fisd_issue.parquet",
+            # DATA_DIR / "pulled" / "fisd_issuer.parquet",
+            # DATA_DIR / "pulled" / "fisd_ratings_moodys.parquet",
+            # DATA_DIR / "pulled" / "fisd_ratings_sp.parquet",
+            # DATA_DIR / "pulled" / "fisd_redemption.parquet",
+            # DATA_DIR / "pulled" / "liu_wu_yields.parquet",
+            # DATA_DIR / "pulled" / "osbap_linker.parquet",
+            # DATA_DIR / "pulled" / "treasury_bond_returns.parquet",
         ],
         "targets": [],
     },
     "02_trace_cleaning_walkthrough_ipynb": {
         "path": "./src/02_trace_cleaning_walkthrough_ipynb.py",
         "file_dep": [
-            DATA_DIR / "fisd_universe.parquet",
+            # DATA_DIR / "fisd_universe.parquet",
         ],
         "targets": [],
     },
@@ -390,7 +364,7 @@ def task_run_notebooks():
                 pyfile_path,
                 *notebook_tasks[notebook]["file_dep"],
             ],
-            "task_dep": notebook_tasks[notebook].get("task_dep", []),
+            # "task_dep": notebook_tasks[notebook].get("task_dep", []),
             "targets": [
                 OUTPUT_DIR / f"{notebook}.html",
                 *notebook_tasks[notebook]["targets"],
@@ -424,9 +398,6 @@ def task_build_chartbook_site():
         ],
         "targets": sphinx_targets,
         "file_dep": file_dep,
-        "task_dep": [
-            "run_notebooks",
-        ],
         "clean": True,
     }
 
@@ -439,15 +410,15 @@ def task_test_stage1_vs_open_source():
             f"python -m pytest ./src/test_stage1_vs_open_source.py -v "
             f"--tb=short --junitxml={OUTPUT_DIR / 'test_results.xml'}",
         ],
-        "task_dep": ["run_stage1"],
+        # "task_dep": ["run_stage1"],
         "targets": [
             OUTPUT_DIR / "test_results.xml",
         ],
         "file_dep": [
             "./src/test_stage1_vs_open_source.py",
             "./src/settings.py",
-            DATA_DIR / "stage1" / "stage1_latest.parquet",
-            DATA_DIR / "pulled" / "corporate_bond_returns.parquet",
+            # DATA_DIR / "stage1" / "stage1_latest.parquet",
+            # DATA_DIR / "pulled" / "corporate_bond_returns.parquet",
         ],
         "clean": [],
         "verbosity": 2,
