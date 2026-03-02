@@ -52,7 +52,7 @@ nbconvert
 jupyter
 
 # Chartbook (for building Sphinx docs site)
-"chartbook[all]"
+chartbook[all]
 
 # Testing
 pytest
