@@ -179,6 +179,89 @@ The job requests 16 CPUs with 128 GB total memory and an 8-hour time limit. Pola
 
 ---
 
+## Running in Parallel on RCC Midway3
+
+For the full TRACE history (2002--2025), the sequential pipeline can take many hours. The parallel version uses [GNU Parallel](https://www.gnu.org/software/parallel/) + `srun` to distribute the CUSIP filtering and Dick-Nielsen cleaning across multiple workers, processing different months simultaneously. This follows the [RCC recommended pattern](https://midwayr-docs.rcc.uchicago.edu/running-jobs/parallel/) for running many serial tasks within a single Slurm allocation.
+
+### What gets parallelized
+
+The pipeline has a natural dependency structure:
+
+```
+rsync pulled data (sequential)
+  -> build_fisd_universe (sequential, fast)
+    -> filter_trace_fisd: 3 datasets x N months (PARALLEL)
+      -> stage0 cleaning: 3 datasets x N months (PARALLEL)
+        -> stage1 analytics (sequential, loads all months)
+```
+
+Each month's filtering and cleaning is independent -- it reads one input partition and writes one output partition with no cross-month state. Stage 1 loads all months at once, so it remains sequential.
+
+### Prerequisites
+
+Same as the sequential pipeline (Steps 1--4 above). No additional setup is needed.
+
+### Submit the parallel job
+
+```bash
+sbatch run-pipeline-parallel.sbatch
+```
+
+This uses two files:
+- **`run-pipeline-parallel.sbatch`** -- the Slurm script that orchestrates the sequential and parallel phases
+- **`process-month.sh`** -- a worker script that processes a single (dataset, month) combination, called by GNU Parallel via `srun`
+
+### Default resource allocation
+
+| Resource | Default | Notes |
+|----------|---------|-------|
+| Nodes | 4 | Each node runs 8 parallel workers |
+| Tasks per node | 8 | Total 32 concurrent workers |
+| CPUs per task | 2 | Stage 0 benefits from threading |
+| Memory per CPU | 8 GB | 16 GB per worker |
+| Time limit | 8 hours | Sufficient for full history with 32 workers |
+
+### Scaling up
+
+To increase parallelism, adjust `--nodes` in the sbatch file. More nodes means more concurrent workers:
+
+| `--nodes` | Total workers | Approximate stage0 time (full history) |
+|-----------|---------------|----------------------------------------|
+| 2 | 16 | ~4.5 hours |
+| 4 | 32 | ~2.5 hours |
+| 8 | 64 | ~1.5 hours |
+
+### Checkpoint and resume
+
+GNU Parallel tracks completed jobs in log files under `_data/logs/parallel/`. If the job fails partway through (timeout, node failure, etc.), resubmit the same script:
+
+```bash
+sbatch run-pipeline-parallel.sbatch
+```
+
+The `--resume` flag causes GNU Parallel to skip jobs that already completed successfully. Only failed or unstarted jobs will be retried.
+
+To start completely fresh (reprocess all months), delete the job logs first:
+
+```bash
+rm _data/logs/parallel/*_joblog.txt
+sbatch run-pipeline-parallel.sbatch
+```
+
+### Monitoring
+
+```bash
+squeue -u ${USER}                                    # Check job status
+tail -f <jobid>_clean-trace-parallel.out             # Follow stdout
+tail -f <jobid>_clean-trace-parallel.err             # Follow stderr
+
+# Check GNU Parallel progress (columns: Seq, Host, StartTime, Runtime, Send, Receive, ExitVal, Signal, Command)
+column -t _data/logs/parallel/filter_joblog.txt      # Filter phase progress
+column -t _data/logs/parallel/stage0_joblog.txt      # Stage0 phase progress
+```
+
+---
+
 ## Pipeline Overview
 
 The pipeline is orchestrated by `dodo.py` and proceeds in stages:
@@ -199,9 +282,11 @@ All intermediate and derived data lives under `_data/` (reconstructible, not ver
 
 ```
 case_study_clean_trace/
-├── dodo.py                  # PyDoit task definitions (the build system)
-├── run-pipeline.sbatch      # Slurm batch script for RCC Midway3
-├── chartbook.toml           # Documentation site configuration
+├── dodo.py                       # PyDoit task definitions (the build system)
+├── run-pipeline.sbatch           # Slurm batch script (sequential) for RCC Midway3
+├── run-pipeline-parallel.sbatch  # Slurm batch script (parallel) for RCC Midway3
+├── process-month.sh              # Worker script for parallel pipeline
+├── chartbook.toml                # Documentation site configuration
 ├── requirements.txt         # Python dependencies
 ├── .env.example             # Example environment variables
 ├── LICENSE                  # MIT License (Alexander Dickerson)
