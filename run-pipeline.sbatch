@@ -39,7 +39,7 @@ echo "[$(date)] Working directory: ${WORK_DIR}"
 
 # --- Activate conda environment ---
 module load python/anaconda-2024.10
-source activate "${PROJECT_BASE}/${USER}/envs/clean_trace"
+source activate "${PROJECT_BASE}/envs/clean_trace"
 echo "[$(date)] Activated conda environment"
 
 # --- Install/update dependencies ---
