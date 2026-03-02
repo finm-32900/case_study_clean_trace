@@ -70,8 +70,8 @@ echo "[$(date)] Data sync complete"
 
 # Mark pull tasks as done (data already synced)
 echo "[$(date)] Marking pull tasks as ignored..."
-doit ignore pull:fama_french pull:fisd pull:liu_wu pull:osbap \
-    pull:trace_144a pull:trace_enhanced pull:trace_standard
+doit pull
+doit ignore build_chartbook_site
 echo "[$(date)] Pull tasks ignored"
 
 # Build FISD universe (single task, fast)

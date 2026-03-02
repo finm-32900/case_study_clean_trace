@@ -56,8 +56,8 @@ echo "[$(date)] Data sync complete"
 
 # --- Tell doit to skip all pull tasks (data already synced) ---
 echo "[$(date)] Marking pull tasks as ignored..."
-doit ignore pull:fama_french pull:fisd pull:liu_wu pull:osbap \
-    pull:trace_144a pull:trace_enhanced pull:trace_standard
+doit ignore pull
+doit ignore build_chartbook_site
 echo "[$(date)] Pull tasks ignored"
 
 # --- Run the full pipeline ---
