@@ -89,9 +89,9 @@ Worker nodes on Midway3 do not have internet access, so data pulls (WRDS, Fama-F
 The instructor runs the data pull interactively on the Midway3 head node (which has internet access):
 
 ```bash
-cd /project/finm32900/<instructor_username>/case_study_clean_trace
+cd /project/finm32900/case_study_clean_trace
 module load python/anaconda-2024.10
-source activate /project/finm32900/<instructor_username>/envs/clean_trace
+source activate /project/finm32900/envs/clean_trace
 doit pull
 ```
 
@@ -107,7 +107,7 @@ git clone <this-repo-url> case_study_clean_trace
 cd case_study_clean_trace
 ```
 
-Use `/project/` space (not `/home/`) to avoid inode quotas and take advantage of the larger storage allocation.
+Use `/project/` space (not `/home/`) to take advantage of the larger storage allocation for data files.
 
 #### 2. Set up your environment file
 
@@ -125,17 +125,17 @@ END_DATE=2025-12-31
 
 #### 3. Create conda environment
 
-Do **not** pip install into the base Anaconda module -- the system-managed packages (pandas, numpy, etc.) will conflict with the versions this pipeline requires. Create an isolated conda environment in project space:
+Do **not** pip install into the base Anaconda module -- the system-managed packages (pandas, numpy, etc.) will conflict with the versions this pipeline requires. Create an isolated conda environment in your home directory:
 
 ```bash
 # Load conda (never run `conda init` on RCC -- use `source activate`)
 module load python/anaconda-2024.10
 
-# Create environment in project space (avoids home directory inode quota)
-conda create --prefix=/project/finm32900/${USER}/envs/clean_trace python=3.11 -y
+# Create environment in home directory (keeps /project inode usage low)
+conda create --prefix=$HOME/envs/clean_trace python=3.11 -y
 
 # Activate and install
-source activate /project/finm32900/${USER}/envs/clean_trace
+source activate $HOME/envs/clean_trace
 pip install -r requirements.txt
 ```
 
@@ -143,8 +143,10 @@ To reactivate in future sessions:
 
 ```bash
 module load python/anaconda-2024.10
-source activate /project/finm32900/${USER}/envs/clean_trace
+source activate $HOME/envs/clean_trace
 ```
+
+> **Note:** This personal environment is for interactive work on the head node (e.g., setting up `.pgpass`, testing small runs). Batch jobs submitted via `sbatch` use a shared centralized environment managed by the instructor -- you do not need to configure anything for batch execution.
 
 #### 4. Configure WRDS `.pgpass`
 
